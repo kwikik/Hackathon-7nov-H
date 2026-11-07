@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from controller import TERMINAL_TOOLS, PageController
-from planner import HoloPlanner, MockPlanner
+from planner import HoloPlanner, MockPlanner, match_value, strip_accents
 
 RUNS_DIR = Path(__file__).with_name("runs")
 
@@ -43,9 +43,53 @@ class RunState:
     awaiting: str | None = None
     error: str | None = None
     screenshot: str | None = None
+    recap: list[dict[str, Any]] | None = None  # champs relus juste avant une confirmation
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def _norm(value: str) -> str:
+    """Compare sans accents, casse, espaces ni ponctuation : « 06 12 34 » == « 061234 »."""
+    return "".join(ch for ch in strip_accents(str(value)).lower() if ch.isalnum())
+
+
+def build_recap(digest: dict[str, Any], profile: dict[str, Any]) -> list[dict[str, Any]]:
+    """Relit le formulaire tel qu'il est à l'écran et le compare au profil.
+
+    Chaque ligne : {label, value, expected, status}
+      ok       la valeur saisie correspond au profil
+      diff     elle ne correspond pas : on montre ce que le profil disait
+      other    pas de donnée correspondante au profil (réponse à ask_user, choix...)
+      missing  champ obligatoire resté vide
+    Les champs vides et facultatifs sont omis : on montre ce qui part, pas le décor.
+    """
+    rows: list[dict[str, Any]] = []
+    for field in digest.get("fields", []):
+        kind = field.get("type") or ""
+        if kind in ("hidden", "submit", "button", "reset", "image", "file", "password"):
+            continue
+        if kind in ("checkbox", "radio"):
+            if not field.get("checked"):
+                continue
+            value = "coché"
+        else:
+            value = str(field.get("value") or "").strip()
+        label = (field.get("label") or field.get("name") or "champ").strip()[:60]
+        expected = match_value(field, profile) if kind not in ("checkbox", "radio") else None
+
+        if not value:
+            if field.get("required"):
+                rows.append({"label": label, "value": "", "expected": expected, "status": "missing"})
+            continue
+        if expected is None:
+            status = "other"
+        elif _norm(value) == _norm(expected):
+            status = "ok"
+        else:
+            status = "diff"
+        rows.append({"label": label, "value": value[:120], "expected": expected, "status": status})
+    return rows
 
 
 def _write_state(state: RunState) -> None:
@@ -157,6 +201,9 @@ def run(
                 if call["name"] == "request_confirmation":
                     state.status = "awaiting_confirmation"
                     state.awaiting = call["args"].get("summary", "")
+                    # Ce que le formulaire contient VRAIMENT, relu à l'écran : pas ce
+                    # que le modèle dit avoir tapé.
+                    state.recap = build_recap(controller.describe(), profile)
                     _write_state(state)
                 elif call["name"] == "ask_user":
                     state.status = "awaiting_input"
@@ -173,6 +220,7 @@ def run(
                 if call["name"] == "request_confirmation":
                     confirmed["value"] = bool(payload.get("approved"))
                     state.awaiting = None
+                    state.recap = None
                     if not confirmed["value"]:
                         planner.record(results)  # historique cohérent si une consigne suit
                         state.status = "aborted"

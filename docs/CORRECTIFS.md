@@ -9,7 +9,7 @@
 
 1. [Sécurité du garde-fou](#1-sécurité-du-garde-fou)
 2. [Holo](#2-holo)
-3. [Gladia](#3-gladia) · [Linkup](#3-bis-linkup-recherche-web)
+3. [Gladia](#3-gladia) · [Linkup](#3-bis-linkup-recherche-web) · [Expérience de démo](#3-ter-expérience-de-démo)
 4. [Bugs et fragilités](#4-bugs-et-fragilités)
 5. [Hygiène du repo](#5-hygiène-du-repo)
 
@@ -74,6 +74,19 @@ Mesures (vérifié) : `depth: "fast"`, 1,2 à 1,7 s par recherche. Run réel Hol
 officielle pour déclarer la vente de mon véhicule » : `web_search` → `navigate` vers la fiche
 F1707 de service-public → `answer`, **3 pas** (9 pas sans recherche, mesure ANTS du 7 nov).
 
+## 3 ter. Expérience de démo
+
+| # | Amélioration | État | Où |
+|---|---|---|---|
+| X1 | **Récap avant envoi** : à `request_confirmation`, le runner relit le formulaire à l'écran (`describe`) et compare chaque champ au profil — ✓ profil / ≠ profil (avec la valeur attendue) / hors profil / obligatoire vide. Comparaison sans accents, casse, espaces ni ponctuation | ✅ | `runner.py` — `build_recap`, `demo/app.html` — `renderRecap` |
+| X2 | **L'agent parle** : synthèse vocale du navigateur (voix française, « Natural » / Google en priorité) pour les questions, la confirmation (+ nombre de champs à vérifier) et la réponse finale. URL non lues. Se tait quand on maintient Espace. Case « l'agent parle » | ✅ | `demo/app.html` — `say`, `speakState` |
+| X3 | Écouter la voix choisie sur le PC de la démo (Edge a les voix « Natural », bien meilleures que celles de Chrome) | ⬜ | — |
+
+Test (vérifié) : `build_recap` sur un formulaire factice → ok, diff (email), ok (téléphone écrit
+sans espaces), hors profil, obligatoire vide. Run mock complet dans l'interface → tableau de 4
+champs conformes, phrase de confirmation puis réponse finale lues, tableau masqué après
+validation, 0 erreur JS.
+
 ## 4. Bugs et fragilités
 
 | # | Correctif | État | Où |
@@ -86,6 +99,7 @@ F1707 de service-public → `answer`, **3 pas** (9 pas sans recherche, mesure AN
 | B6 | Le micro se rouvrait pendant la transcription / juste après l'envoi d'une consigne en mode conversation | ✅ | `demo/app.html` — `render` |
 | B7 | `agent.log` ouvert à chaque run et jamais fermé | ⬜ | `demo_server.py` — `_start` |
 | B8 | `start_demo.bat` n'ouvre pas le navigateur malgré son commentaire. Réécrit : attend le serveur puis ouvre la page ; nouveau `stop_demo.bat` pour tout fermer | ✅ | `start_demo.bat`, `stop_demo.bat` |
+| B10 | **Accès jury par tunnel** : `tunnel_demo.bat` (Cloudflare quick tunnel). Par le tunnel, mot de passe obligatoire (HTTP Basic, `DEMO_PASSWORD`) ; sans mot de passe défini, accès distant refusé. CSRF : la page servie par le tunnel est acceptée (même origine), toute autre origine refusée | ✅ | `demo_server.py` — `_authorized`, `_refuse_foreign`, `tunnel_demo.bat` |
 | B9 | Deux serveurs pouvaient partager le port 8765 sous Windows (requêtes réparties au hasard) | ✅ | `demo_server.py` — `main` |
 
 ## 5. Hygiène du repo

@@ -19,6 +19,8 @@ Endpoints
 """
 from __future__ import annotations
 
+import base64
+import hmac
 import json
 import os
 import subprocess
@@ -30,11 +32,17 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
+from dotenv import load_dotenv
+
 ROOT = Path(__file__).parent
 RUNS = ROOT / "runs"
+load_dotenv(ROOT / ".env")
 PORT = int(os.environ.get("DEMO_PORT", "8765"))
 
 ALLOWED_ORIGINS = {f"http://localhost:{PORT}", f"http://127.0.0.1:{PORT}"}
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]", ""}
+# Ajoutés par un tunnel ou un proxy (Cloudflare, ngrok) : un client ne peut pas les retirer.
+PROXY_HEADERS = ("Cf-Ray", "Cf-Connecting-Ip", "X-Forwarded-For", "X-Forwarded-Host", "Ngrok-Trace-Id")
 
 _lock = threading.Lock()
 _process: subprocess.Popen | None = None
@@ -70,7 +78,49 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- GET ----------
 
+    # ---------- accès distant (tunnel) ----------
+
+    def _is_remote(self) -> bool:
+        """Vrai si la requête arrive par un tunnel, pas depuis le PC de la démo."""
+        if any(self.headers.get(h) for h in PROXY_HEADERS):
+            return True
+        host = (self.headers.get("Host") or "").rsplit(":", 1)[0].lower()
+        return host not in LOCAL_HOSTS
+
+    def _authorized(self) -> bool:
+        """En local : libre. Par le tunnel : mot de passe obligatoire (DEMO_PASSWORD).
+
+        Sans ça, n'importe qui avec le lien lance l'agent et dépense les crédits
+        Holo, Gladia et Linkup. Sans mot de passe défini, l'accès distant est fermé.
+        """
+        if not self._is_remote():
+            return True
+        password = os.environ.get("DEMO_PASSWORD", "")
+        if not password:
+            _json(self, {"error": "accès distant fermé : définis DEMO_PASSWORD dans .env"}, 403)
+            return False
+        given = ""
+        auth = self.headers.get("Authorization", "")
+        if auth.startswith("Basic "):
+            try:
+                given = base64.b64decode(auth[6:]).decode("utf-8").partition(":")[2]
+            except (ValueError, UnicodeDecodeError):
+                given = ""
+        if given and hmac.compare_digest(given.encode(), password.encode()):
+            return True
+        # Le navigateur affiche sa boîte de connexion native, puis renvoie le mot de
+        # passe tout seul sur chaque requête de la page (fetch inclus).
+        body = b"mot de passe requis"
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="Cerfa demo", charset="UTF-8"')
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+        return False
+
     def do_GET(self) -> None:
+        if not self._authorized():
+            return
         path = urlparse(self.path).path
         if path in ("/", "/index.html"):
             return self._file(ROOT / "demo" / "app.html", "text/html; charset=utf-8")
@@ -133,7 +183,9 @@ class Handler(BaseHTTPRequestHandler):
         s'il est absent, c'est un client hors navigateur (curl), pas une page web.
         """
         origin = self.headers.get("Origin")
-        if origin and origin not in ALLOWED_ORIGINS:
+        # Même origine que la page servie (localhost, ou l'adresse du tunnel) : OK.
+        same_host = bool(origin) and urlparse(origin).netloc.lower() == (self.headers.get("Host") or "").lower()
+        if origin and origin not in ALLOWED_ORIGINS and not same_host:
             return f"origine refusée : {origin}"
         # /transcribe reçoit de l'audio brut ; tout le reste doit être du JSON.
         # Un POST cross-origin en application/json déclenche un preflight CORS
@@ -149,6 +201,8 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length) if length else b""
 
+        if not self._authorized():
+            return
         refused = self._refuse_foreign(path, body)
         if refused:
             return _json(self, {"error": refused}, 403)

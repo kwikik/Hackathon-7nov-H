@@ -104,6 +104,22 @@
   .vb-right { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
   .vb-right button { padding: 11px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; border: 1px solid var(--line); background: #0c0f17; color: var(--text); }
   .vb-right button.go { background: linear-gradient(180deg,#1fbf85,#12a06c); border-color: #24d29566; color: #04120c; }
+  /* récap des champs avant envoi */
+  #voicebar { align-items: flex-end; }
+  #vb-recap { margin-top: 12px; max-height: 38vh; overflow-y: auto; border: 1px solid #2a2f45; border-radius: 10px; }
+  #vb-recap[hidden] { display: none; }
+  #vb-recap table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  #vb-recap th { position: sticky; top: 0; background: #151827; text-align: left; font: 600 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 8px 12px; }
+  #vb-recap td { padding: 7px 12px; border-top: 1px solid #1d2133; vertical-align: top; }
+  #vb-recap td.l { color: var(--muted); width: 28%; }
+  #vb-recap td.v { color: #eef0f8; font-family: var(--mono); font-size: 12.5px; word-break: break-word; }
+  #vb-recap td.s { width: 1%; white-space: nowrap; font: 600 11px var(--mono); }
+  #vb-recap tr.ok td.s { color: var(--ok); }
+  #vb-recap tr.diff td.s, #vb-recap tr.missing td.s { color: var(--danger); }
+  #vb-recap tr.diff td.v, #vb-recap tr.missing td.v { color: #ffb8c4; }
+  #vb-recap tr.other td.s { color: var(--warn); }
+  #vb-recap .was { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  #vb-recap-sum { font: 11.5px var(--mono); color: var(--muted); margin-top: 8px; }
   #vb-bars { display: flex; align-items: flex-end; gap: 3px; height: 30px; margin-right: 8px; }
   #banner { display: none; margin: 10px 22px 0; padding: 9px 13px; border-radius: 10px; font: 12px var(--mono); background: #ff547012; border: 1px solid #ff547044; color: #ffb8c4; }
   kbd { background: #161a25; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font: 11px var(--mono); color: var(--muted); }
@@ -159,6 +175,7 @@
       </div>
       <label class="check" style="margin-top:8px"><input type="checkbox" id="noconfirm"> ne jamais demander de confirmation</label>
       <label class="check" style="margin-top:8px"><input type="checkbox" id="converse" checked> mode conversation — il reste ouvert et suit mes consignes</label>
+      <label class="check" style="margin-top:8px"><input type="checkbox" id="speak" checked> l'agent parle — il lit ses questions et ses réponses</label>
     </div>
 
     <div class="card" style="flex:1; min-height:0; display:flex; flex-direction:column">
@@ -181,6 +198,8 @@
   <div class="vb-left">
     <span class="vb-badge" id="vb-badge">il t'écoute</span>
     <div class="vb-text" id="vb-text">—</div>
+    <div id="vb-recap" hidden></div>
+    <div id="vb-recap-sum"></div>
     <div class="vb-sub" id="vb-sub">parle, je transcris ta réponse</div>
   </div>
   <div class="vb-right">
@@ -245,7 +264,9 @@ function render() {
     $("#vb-text").textContent = state.awaiting || "—";
     $("#vb-yes").style.display = needConfirm ? "block" : "none";
     $("#vb-no").style.display = needConfirm ? "block" : "none";
+    renderRecap(needConfirm ? state.recap : null);
   }
+  speakState(ask, needConfirm);
   if (state.status !== lastStatus) {
     if (ask) enterAnswerMode("input");
     else if (needConfirm) enterAnswerMode("confirm");
@@ -269,6 +290,77 @@ function render() {
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 function banner(msg) { const b = $("#banner"); b.textContent = msg || ""; b.style.display = msg ? "block" : "none"; }
+
+// ---------- récap avant envoi ----------
+// Le runner relit le formulaire À L'ÉCRAN au moment de la demande de confirmation
+// et compare chaque champ au profil : on montre ce qui part vraiment.
+const RECAP_BADGE = { ok: "✓ profil", diff: "≠ profil", other: "hors profil", missing: "vide !" };
+let lastRecapKey = "";
+
+function renderRecap(rows) {
+  const key = JSON.stringify(rows || null);
+  if (key === lastRecapKey) return;
+  lastRecapKey = key;
+  const box = $("#vb-recap"), sum = $("#vb-recap-sum");
+  if (!rows || !rows.length) { box.hidden = true; box.innerHTML = ""; sum.textContent = ""; return; }
+  box.hidden = false;
+  box.innerHTML = "<table><thead><tr><th>Champ</th><th>Ce qui sera envoyé</th><th></th></tr></thead><tbody>" +
+    rows.map((r) => `<tr class="${esc(r.status)}">
+      <td class="l">${esc(r.label)}</td>
+      <td class="v">${r.value ? esc(r.value) : "<i>(vide)</i>"}${r.status === "diff" && r.expected ? `<span class="was">profil : ${esc(r.expected)}</span>` : ""}</td>
+      <td class="s">${RECAP_BADGE[r.status] || ""}</td></tr>`).join("") +
+    "</tbody></table>";
+  const n = (s) => rows.filter((r) => r.status === s).length;
+  const alerts = n("diff") + n("missing");
+  sum.textContent = `${rows.length} champ(s) · ${n("ok")} conforme(s) au profil` +
+    (alerts ? ` · ${alerts} à vérifier` : "") + (n("other") ? ` · ${n("other")} hors profil` : "");
+}
+
+// ---------- l'agent parle ----------
+// Synthèse vocale du navigateur : gratuite, sans réseau, aucune dépendance.
+// On lit les questions, la demande de confirmation et la réponse finale.
+let voiceFr = null, lastSpokenKey = "", speechBooted = false;
+function pickVoice() {
+  if (!("speechSynthesis" in window)) return;
+  const fr = speechSynthesis.getVoices().filter((v) => /^fr/i.test(v.lang));
+  voiceFr = fr.find((v) => /natural|online|neural/i.test(v.name)) || fr.find((v) => /google/i.test(v.name))
+    || fr.find((v) => v.lang === "fr-FR") || fr[0] || null;
+}
+if ("speechSynthesis" in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+
+function say(text) {
+  if (!$("#speak").checked || !text || !("speechSynthesis" in window)) return;
+  // Les URL lues lettre par lettre sont insupportables : on les remplace.
+  const clean = String(text).replace(/https?:\/\/\S+/g, "le lien est affiché à l'écran").slice(0, 400);
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(clean);
+  u.lang = "fr-FR";
+  if (voiceFr) u.voice = voiceFr;
+  u.rate = 1.05;
+  speechSynthesis.speak(u);
+}
+function hush() { if ("speechSynthesis" in window) speechSynthesis.cancel(); }
+
+function speakState(ask, needConfirm) {
+  let key = null, text = null;
+  if (ask) { key = "ask:" + state.awaiting; text = state.awaiting; }
+  else if (needConfirm) {
+    const rows = state.recap || [];
+    const alerts = rows.filter((r) => r.status === "diff" || r.status === "missing").length;
+    key = "confirm:" + state.awaiting;
+    text = (state.awaiting || "Je m'apprête à envoyer.") +
+      (alerts ? ` Attention, ${alerts} champ${alerts > 1 ? "s sont" : " est"} à vérifier.` : "");
+  } else if (state.answer && ["done", "listening", "aborted"].includes(state.status)) {
+    key = "answer:" + state.answer; text = state.answer;
+  } else if (state.status === "error") {
+    key = "error:" + (state.error || ""); text = "Je n'ai pas réussi à terminer. Le détail est dans le journal.";
+  }
+  // Premier affichage de la page : on ne relit pas l'état d'un run précédent.
+  if (!speechBooted) { speechBooted = true; lastSpokenKey = key || ""; return; }
+  if (!key || key === lastSpokenKey) return;
+  lastSpokenKey = key;
+  say(text);
+}
 
 // ---------- micro : push-to-talk ----------
 // Tant qu'on maintient Espace (ou le bouton micro), on enregistre. On relâche :
@@ -326,6 +418,7 @@ async function ensureMic() {
 async function pressTalk() {
   if (held || listening) return;
   held = true;
+  hush();  // on prend la parole : l'agent se tait (et le micro ne l'enregistre pas)
   if (!(await ensureMic())) { held = false; return; }
   if (!held) {  // relâché pendant l'ouverture du micro
     $("#mic-vu").textContent = "micro prêt — maintiens Espace pendant que tu parles";

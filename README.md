@@ -43,6 +43,8 @@ Voix  ──▶ Gladia (STT)  ──▶ consigne
   c'est une barrière dans le code.
 - **Zéro invention de données.** Les valeurs saisies viennent d'un profil local (`profile.json`).
   Si une donnée obligatoire manque, l'agent appelle `ask_user` au lieu de remplir au hasard.
+- **Il montre ce qu'il va envoyer.** Avant l'envoi, chaque champ du formulaire est relu à l'écran
+  et comparé au profil : on valide ce qui part vraiment, pas ce que le modèle dit avoir tapé.
 - **Il cherche avant de naviguer.** Un outil `web_search` (Linkup) trouve la page exacte de la
   démarche, sur les seuls sites officiels. Mesuré : « déclarer la vente de mon véhicule » en
   **3 pas** (recherche → page officielle → réponse) au lieu de 9 en explorant les menus.
@@ -139,13 +141,34 @@ http://localhost:8765. Si le serveur tourne déjà, le script ouvre juste la pag
 
 Sans les scripts (macOS / Linux) : `python demo_server.py`, puis Ctrl+C pour arrêter.
 
+**Ouvrir au jury (lien public)** : la démo tourne sur ton PC et un tunnel Cloudflare lui donne une
+adresse `https://xxx.trycloudflare.com` (prérequis : `winget install --id Cloudflare.cloudflared`).
+
+```powershell
+.	unnel_demo.bat
+```
+
+Le lien s'affiche dans le terminal et change à chaque lancement. Par le tunnel, le navigateur
+demande un mot de passe : identifiant libre (ex. `jury`), mot de passe = `DEMO_PASSWORD` du `.env`.
+Sans `DEMO_PASSWORD`, l'accès distant est refusé. En local (`localhost`), pas de mot de passe.
+Ctrl+C coupe le tunnel, la démo locale continue. Un seul run à la fois pour tout le monde, et la
+fenêtre Chromium de l'agent s'ouvre sur ton PC : le jury suit l'écran de l'agent dans l'interface.
+
 La page (`demo/app.html`) écoute la voix (micro du navigateur → Gladia), lance l'agent et affiche en direct :
 
 - la transcription de la consigne,
 - la capture de l'écran de l'agent (rafraîchie à chaque pas),
 - le journal des actions (tool, arguments, résultat, durée),
 - la question de l'agent quand une donnée manque, et la demande de confirmation avant envoi,
-  auxquelles on peut répondre à la voix (maintenir Espace, « oui », « vas-y ») ou par les boutons.
+  auxquelles on peut répondre à la voix (maintenir Espace, « oui », « vas-y ») ou par les boutons,
+- **le récap avant envoi** : au moment de la confirmation, l'agent relit le formulaire *à l'écran*
+  et l'interface montre chaque champ qui va partir, comparé au profil (✓ profil, ≠ profil avec la
+  valeur attendue, hors profil, obligatoire vide).
+
+**L'agent parle** (case cochée par défaut) : il lit à voix haute ses questions, sa demande de
+confirmation (en signalant les champs à vérifier) et sa réponse finale. Synthèse vocale du
+navigateur, sans réseau ni dépendance ; les URL sont remplacées par « le lien est affiché à
+l'écran ». Il se tait dès qu'on maintient Espace.
 
 **Mode conversation** (case cochée par défaut) : le navigateur reste ouvert entre deux consignes.
 Chaque nouvelle phrase est envoyée à `/instruct` et l'agent la joue sur la même page, avec la
@@ -191,6 +214,7 @@ search.py           Linkup : recherche de la démarche sur les sites officiels
 demo_server.py      serveur de démo (stdlib) + API
 start_demo.bat      ouvre la démo : serveur + navigateur (Windows)
 stop_demo.bat       ferme la démo : serveur, agent, Chromium (Windows)
+tunnel_demo.bat     lien public pour le jury : tunnel Cloudflare + mot de passe (Windows)
 profile.json        données personnelles utilisées par l'agent
 .env.example        modèle de configuration (copier en .env)
 
