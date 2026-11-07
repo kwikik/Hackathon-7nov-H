@@ -44,9 +44,14 @@ Decide the next step and call the tools.
 6. If a page looks blank, if a click changes nothing, or if you took the wrong path: never repeat the
    same action. Use `wait` (2-3 s), then `go_back`, or `navigate` straight to the exact URL of the
    procedure. The <page> block always carries `visible_text`: read it before deciding the page is empty.
-7. If the current page is blank (about:blank) or unrelated to the TASK, call `navigate` first. Use the
-   website the user named; otherwise pick the official site for the procedure (service-public.gouv.fr,
-   ants.gouv.fr, impots.gouv.fr, caf.fr, ameli.fr...). Each new instruction may target another site.
+7. If the current page is blank (about:blank) or unrelated to the TASK and you do not know the exact URL
+   of the procedure, call `web_search` first (it only searches official sites), then `navigate` straight
+   to the best result. Never explore menus blindly when one search can give you the page. If the user
+   named a website, go there. If `web_search` fails, navigate to the official site yourself
+   (service-public.gouv.fr, ants.gouv.fr, impots.gouv.fr, caf.fr, ameli.fr...).
+   Each new instruction may target another site.
+   When the TASK is only a question (e.g. which documents to provide), the snippets of `web_search`
+   may already be enough: open the best page to confirm, then `answer` with the source URL.
 8. When the form is filled and the submission is confirmed, call `answer`. `answer` is the only way
    to stop: never stop without it.
 9. The user may give a follow-up instruction inside <new_instruction> tags. It replaces the TASK above,

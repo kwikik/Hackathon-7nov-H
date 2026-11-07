@@ -1,9 +1,12 @@
 """Gladia : un fichier audio -> la consigne en texte.
 
-Flux officiel v2 :
+Flux officiel v2 (pre-recorded) :
   1. POST /v2/upload           (multipart)  -> audio_url
   2. POST /v2/pre-recorded     (json)       -> job id + result_url
   3. GET  /v2/pre-recorded/:id              -> result.transcription.full_transcript
+
+Modèle : Solaria-3 par défaut, le plus précis de Gladia sur le français (pre-recorded
+uniquement). Solaria-1 reste disponible via GLADIA_MODEL=solaria-1.
 
 Test rapide sans micro :
     python voice.py --wav commande.wav
@@ -21,8 +24,21 @@ import requests
 from dotenv import load_dotenv
 
 API = "https://api.gladia.io/v2"
-POLL_INTERVAL = 0.7
+DEFAULT_MODEL = "solaria-3"
+POLL_INTERVAL = 0.25
 TIMEOUT = 90
+
+# Mots que le STT générique écorche et que le jury va entendre : on les impose.
+VOCABULARY = [
+    "Cerfa", "ANTS", "FranceConnect", "CAF", "URSSAF", "Ameli", "CPAM",
+    "service-public.gouv.fr", "impots.gouv.fr", "carte grise", "certificat d'immatriculation",
+    "certificat de cession", "permis de conduire", "carte d'identité", "passeport",
+    "APL", "RSA", "prime d'activité", "SIRET", "IBAN", "auto-entrepreneur", "Holo",
+]
+
+# Une seule connexion HTTPS réutilisée : upload, job et polling ne refont pas
+# chacun la poignée de main TLS (plusieurs centaines de ms gagnées par phrase).
+_session = requests.Session()
 
 
 class GladiaError(RuntimeError):
@@ -36,6 +52,11 @@ def _key() -> str:
     return key
 
 
+def model_name() -> str:
+    load_dotenv(Path(__file__).with_name(".env"))
+    return os.environ.get("GLADIA_MODEL", DEFAULT_MODEL)
+
+
 def transcribe(path: str | Path, language: str = "fr") -> str:
     """Transcrit un fichier audio et renvoie le texte brut."""
     load_dotenv(Path(__file__).with_name(".env"))
@@ -43,7 +64,7 @@ def transcribe(path: str | Path, language: str = "fr") -> str:
     path = Path(path)
 
     with path.open("rb") as handle:
-        upload = requests.post(
+        upload = _session.post(
             f"{API}/upload",
             headers=headers,
             files={"audio": (path.name, handle, mimetypes.guess_type(path.name)[0] or "audio/wav")},
@@ -53,13 +74,16 @@ def transcribe(path: str | Path, language: str = "fr") -> str:
         raise GladiaError(f"upload {upload.status_code}: {upload.text[:200]}")
     audio_url = upload.json()["audio_url"]
 
-    job = requests.post(
+    job = _session.post(
         f"{API}/pre-recorded",
         headers={**headers, "Content-Type": "application/json"},
         json={
             "audio_url": audio_url,
+            "model": model_name(),
             "language_config": {"languages": [language], "code_switching": False},
             "diarization": False,
+            "custom_vocabulary": True,
+            "custom_vocabulary_config": {"vocabulary": VOCABULARY, "default_intensity": 0.5},
         },
         timeout=60,
     )
@@ -71,7 +95,7 @@ def transcribe(path: str | Path, language: str = "fr") -> str:
 
     deadline = time.monotonic() + TIMEOUT
     while time.monotonic() < deadline:
-        poll = requests.get(result_url, headers=headers, timeout=30)
+        poll = _session.get(result_url, headers=headers, timeout=30)
         if poll.status_code >= 300:
             raise GladiaError(f"poll {poll.status_code}: {poll.text[:200]}")
         data = poll.json()
@@ -85,58 +109,20 @@ def transcribe(path: str | Path, language: str = "fr") -> str:
     raise GladiaError(f"timeout après {TIMEOUT}s sur le job {job_id}")
 
 
-# --------------------------------------------------------------------------- temps réel
+def keep_warm(every: float = 25.0) -> None:
+    """Garde la connexion HTTPS vers Gladia ouverte (à lancer dans un thread).
 
-# Mots que le STT générique écorche et que le jury va entendre : on les impose.
-VOCABULARY = [
-    "Cerfa", "ANTS", "FranceConnect", "France Connect", "CAF", "URSSAF", "Ameli", "CPAM",
-    "service-public.gouv.fr", "impots.gouv.fr", "carte grise", "certificat d'immatriculation",
-    "certificat de cession", "permis de conduire", "carte d'identité", "passeport",
-    "APL", "RSA", "prime d'activité", "SIRET", "IBAN", "auto-entrepreneur", "Holo",
-]
-
-LIVE_SAMPLE_RATE = 16000
-
-
-def init_live_session(language: str = "fr") -> dict:
-    """Ouvre une session Gladia temps réel (WebSocket) et renvoie {id, url}.
-
-    Le navigateur se connecte directement à `url` et y pousse le micro en PCM
-    16 kHz mono : la transcription arrive mot à mot pendant que l'on parle, au
-    lieu d'attendre upload + job + polling (~3 s) comme en mode fichier.
-
-    `endpointing` = silence (en secondes) qui clôt une phrase. 0.05 par défaut chez
-    Gladia : trop court pour une consigne dite d'une traite, une respiration la couperait.
+    La première requête paie DNS + TLS (~1,5 s mesurées) et une connexion inactive
+    finit par être fermée. Un petit GET régulier évite de payer ça sur la phrase
+    dite devant le jury.
     """
     load_dotenv(Path(__file__).with_name(".env"))
-    endpointing = float(os.environ.get("GLADIA_ENDPOINTING", "0.6"))
-    body = {
-        "model": "solaria-1",
-        "encoding": "wav/pcm",
-        "sample_rate": LIVE_SAMPLE_RATE,
-        "bit_depth": 16,
-        "channels": 1,
-        "endpointing": endpointing,
-        "maximum_duration_without_endpointing": 15,
-        "language_config": {"languages": [language], "code_switching": False},
-        "messages_config": {"receive_partial_transcripts": True},
-        "realtime_processing": {
-            "custom_vocabulary": True,
-            "custom_vocabulary_config": {"vocabulary": VOCABULARY, "default_intensity": 0.5},
-        },
-    }
-    response = requests.post(
-        f"{API}/live",
-        headers={"x-gladia-key": _key(), "Content-Type": "application/json"},
-        json=body,
-        timeout=15,
-    )
-    if response.status_code >= 300:
-        raise GladiaError(f"live {response.status_code}: {response.text[:300]}")
-    data = response.json()
-    if "url" not in data:
-        raise GladiaError(f"live: réponse sans url ({str(data)[:200]})")
-    return {"id": data.get("id"), "url": data["url"], "sample_rate": LIVE_SAMPLE_RATE}
+    while True:
+        try:
+            _session.get(f"{API}/pre-recorded", params={"limit": 1}, headers={"x-gladia-key": _key()}, timeout=10)
+        except (requests.RequestException, GladiaError):
+            pass
+        time.sleep(every)
 
 
 def clean_command(text: str) -> str:
@@ -151,7 +137,9 @@ if __name__ == "__main__":
     parser.add_argument("--wav", required=True, help="fichier audio à transcrire")
     args = parser.parse_args()
     try:
-        print(clean_command(transcribe(args.wav)))
+        started = time.monotonic()
+        text = clean_command(transcribe(args.wav))
+        print(f"[{model_name()} · {time.monotonic() - started:.1f} s] {text}")
     except GladiaError as exc:
         print(f"erreur: {exc}", file=sys.stderr)
         sys.exit(1)

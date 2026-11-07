@@ -10,8 +10,7 @@ Endpoints
     GET  /state       état courant de l'agent (JSON)
     GET  /profile     profil utilisateur (JSON)
     GET  /live.png    dernière capture de l'écran
-    POST /live/init   ouvre une session Gladia temps réel -> {id, url} (WebSocket)
-    POST /transcribe  audio (webm) -> texte via Gladia (secours, mode fichier)
+    POST /transcribe  audio (webm) -> texte via Gladia (Solaria-3, push-to-talk)
     POST /start       {task, url, interactive, ...} -> lance agent.py --demo
     POST /instruct    {task} ou {quit} -> consigne suivante en mode conversation
     POST /stop        tue le run en cours
@@ -25,6 +24,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -153,8 +153,6 @@ class Handler(BaseHTTPRequestHandler):
         if refused:
             return _json(self, {"error": refused}, 403)
 
-        if path == "/live/init":
-            return self._live_init()
         if path == "/transcribe":
             return self._transcribe(body)
         if path == "/start":
@@ -187,24 +185,6 @@ class Handler(BaseHTTPRequestHandler):
         (RUNS / "instruction.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return _json(self, {"queued": True, "task": payload.get("task", "")})
 
-    def _live_init(self) -> None:
-        """Ouvre une session Gladia temps réel et renvoie l'URL WebSocket au navigateur.
-
-        La clé API reste côté serveur : le navigateur ne reçoit que l'URL de session.
-        """
-        try:
-            from voice import GladiaError, init_live_session
-
-            session = init_live_session()
-            _log_gladia("live", 0, f"session {session.get('id', '?')}")
-            return _json(self, session)
-        except GladiaError as exc:
-            _log_gladia("erreur", 0, f"live: {exc}")
-            return _json(self, {"error": str(exc)}, 503)
-        except Exception as exc:  # noqa: BLE001
-            _log_gladia("exception", 0, f"live: {type(exc).__name__}: {exc}")
-            return _json(self, {"error": f"{type(exc).__name__}: {exc}"}, 500)
-
     def _transcribe(self, body: bytes) -> None:
         if not body:
             return _json(self, {"error": "audio vide"}, 400)
@@ -216,11 +196,13 @@ class Handler(BaseHTTPRequestHandler):
         audio = RUNS / f"last_audio{suffix}"
         audio.write_bytes(body)
         try:
-            from voice import GladiaError, clean_command, transcribe
+            from voice import GladiaError, clean_command, model_name, transcribe
 
+            started = time.monotonic()
             text = clean_command(transcribe(audio))
-            _log_gladia("ok", len(body), text[:120] or f"(texte vide — écoute {audio.name})")
-            return _json(self, {"text": text})
+            took = time.monotonic() - started
+            _log_gladia("ok", len(body), f"{took:.1f}s | " + (text[:120] or f"(texte vide — écoute {audio.name})"))
+            return _json(self, {"text": text, "model": model_name(), "seconds": round(took, 2)})
         except GladiaError as exc:
             _log_gladia("erreur", len(body), str(exc))
             return _json(self, {"error": str(exc)}, 503)
@@ -324,6 +306,10 @@ def main() -> None:
         print(f"Port {PORT} déjà utilisé : un autre serveur de démo tourne sans doute. ({exc})")
         sys.exit(1)
     print(f"Cerfa demo -> http://localhost:{PORT}")
+    # Connexion à Gladia préchauffée : la première phrase ne paie pas DNS + TLS.
+    from voice import keep_warm
+
+    threading.Thread(target=keep_warm, daemon=True).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

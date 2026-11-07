@@ -125,13 +125,11 @@
       <div class="micwrap">
         <button id="mic" title="Espace pour démarrer/arrêter">●</button>
         <div id="bars"></div>
-        <div id="mic-vu">micro coupé</div>
-        <div class="hint" id="michint">appuie sur le micro ou <kbd>espace</kbd></div>
+        <div id="mic-vu">micro prêt</div>
+        <div class="hint" id="michint">maintiens <kbd>espace</kbd> (ou le micro) pendant que tu parles</div>
       </div>
       <div id="transcript" class="empty" style="margin-top:12px">« Trouve la démarche pour déclarer la vente de mon véhicule… »</div>
       <div id="latency" class="hint" style="margin-top:6px"></div>
-      <label class="check" style="margin-top:12px"><input type="checkbox" id="vad" checked> couper tout seul au silence (mains libres)</label>
-      <label class="check" style="margin-top:8px"><input type="checkbox" id="live" checked> Gladia temps réel — le texte s'écrit pendant que tu parles</label>
     </div>
 
     <div class="card">
@@ -178,7 +176,7 @@
   </div>
 </main>
 
-<!-- barre vocale : l'agent attend une réponse, le micro s'ouvre tout seul -->
+<!-- barre vocale : l'agent attend une réponse, on répond en maintenant Espace -->
 <div id="voicebar">
   <div class="vb-left">
     <span class="vb-badge" id="vb-badge">il t'écoute</span>
@@ -196,7 +194,7 @@
 const $ = (s) => document.querySelector(s);
 const state = { status: "idle", steps: [], thoughts: [], awaiting: null, answer: null };
 let lastRendered = 0, wasAwaiting = false, lastStatus = "idle", answerMode = null, discard = false;
-let conversationMode = false, micFailed = false;
+let conversationMode = false;
 
 // ---------- état ----------
 async function poll() {
@@ -262,30 +260,25 @@ function render() {
   }
   wasAwaiting = ask || needConfirm;
 
-  // Mode conversation : quand l'agent attend, le micro se rouvre tout seul.
-  if (state.running && state.status === "listening") conversationMode = true;
-  // Pas pendant une transcription, ni juste après l'envoi d'une consigne : l'agent
-  // n'a pas encore quitté "listening" et on rouvrirait le micro pendant qu'il travaille.
-  const justSent = performance.now() - instructSentAt < 2500;
-  if (conversationMode && state.status === "listening" && !listening && !micFailed && !transcribing && !justSent) {
-    $("#michint").textContent = "parle, il attend ta consigne";
-    startListening();
+  // Mode conversation : un agent ouvert attend la consigne suivante.
+  if (state.running && state.status === "listening") {
+    conversationMode = true;
+    if (!listening) $("#michint").innerHTML = "il attend — maintiens <kbd>espace</kbd> et parle";
   }
 }
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 function banner(msg) { const b = $("#banner"); b.textContent = msg || ""; b.style.display = msg ? "block" : "none"; }
 
-// ---------- micro : écoute continue + VAD ----------
-// Deux modes de transcription :
-//  - temps réel (défaut) : le micro part en PCM 16 kHz sur un WebSocket Gladia,
-//    le texte s'affiche mot à mot et Gladia détecte lui-même la fin de phrase ;
-//  - fichier (secours) : MediaRecorder -> /transcribe -> upload + job Gladia (~3 s).
-// Si le temps réel échoue (réseau, clé), on bascule tout seul en mode fichier
-// sur le même micro : la phrase en cours n'est pas perdue.
-let audioCtx = null, analyser = null, mediaStream = null, recorder = null, micSource = null;
-let chunks = [], listening = false, spoke = false, silenceTimer = null, rafId = null;
-let live = null, liveBroken = false, lastVoiceAt = 0, transcribing = false, instructSentAt = 0;
+// ---------- micro : push-to-talk ----------
+// Tant qu'on maintient Espace (ou le bouton micro), on enregistre. On relâche :
+// l'audio part à Gladia (/transcribe, modèle Solaria-3) et le texte revient.
+// Pas de détection de silence, pas de coupure surprise : c'est toi qui décides.
+//
+// Le flux micro est ouvert une seule fois puis gardé : sinon chaque appui
+// paierait l'ouverture du micro (100-300 ms) et la première syllabe serait mangée.
+let audioCtx = null, analyser = null, mediaStream = null, recorder = null;
+let chunks = [], listening = false, held = false, rafId = null, pressedAt = 0;
 
 function makeBars(container, count, maxHeight) {
   const arr = [];
@@ -311,257 +304,98 @@ function setVu(level) {
   }
 }
 
-async function startListening() {
-  if (listening) return;
+async function ensureMic() {
+  if (mediaStream && mediaStream.active) return true;
   try {
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
-  } catch (e) { banner("micro refusé : " + e.message); micFailed = true; listening = false; $("#mic-vu").textContent = "micro coupé"; return; }
-
+    // Pas de noiseSuppression : elle abîme la voix et fait baisser la qualité de transcription.
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true, channelCount: 1 },
+    });
+  } catch (e) {
+    banner("micro refusé : " + e.message);
+    $("#mic-vu").textContent = "micro indisponible";
+    return false;
+  }
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  micSource = audioCtx.createMediaStreamSource(mediaStream);
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 1024;
-  micSource.connect(analyser);
-
-  listening = true; spoke = false; lastVoiceAt = 0;
-  $("#mic").classList.add("rec");
-  $("#mic-vu").textContent = "j'écoute…";
-  $("#latency").textContent = "";
-  $("#michint").textContent = $("#vad").checked ? "parle, je coupe au silence" : "ré-appuie pour arrêter";
-  banner("");
-
-  if ($("#live").checked && !liveBroken) startLive(); else startRecorder();
-  loopVad();
+  audioCtx.createMediaStreamSource(mediaStream).connect(analyser);
+  return true;
 }
 
-function releaseMic() {
-  if (mediaStream) { mediaStream.getTracks().forEach((t) => t.stop()); mediaStream = null; }
-  if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
-  micSource = null;
-}
-
-// ---------- mode fichier (secours) ----------
-function startRecorder() {
-  const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
-  recorder = new MediaRecorder(mediaStream, mime ? { mimeType: mime } : {});
-  chunks = [];
-  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-  recorder.onstop = () => {
-    // Les pistes ne doivent être coupées qu'ICI : les arrêter avant `stop()`
-    // tronque le fichier webm et Gladia répond "Unsupported codec".
-    releaseMic();
-    onUtterance(mime || "audio/webm");
-  };
-  recorder.start(200);
-}
-
-// ---------- mode temps réel ----------
-// Le worklet regroupe le son par paquets de 100 ms : un message WebSocket toutes
-// les 100 ms au lieu de 375 par seconde.
-const PCM_WORKLET = URL.createObjectURL(new Blob([`
-class PcmTap extends AudioWorkletProcessor {
-  constructor() { super(); this.buf = new Float32Array(Math.round(sampleRate / 10)); this.n = 0; }
-  process(inputs) {
-    const ch = inputs[0] && inputs[0][0];
-    if (ch) for (let i = 0; i < ch.length; i++) {
-      this.buf[this.n++] = ch[i];
-      if (this.n === this.buf.length) { this.port.postMessage(this.buf.slice(0)); this.n = 0; }
-    }
-    return true;
-  }
-}
-registerProcessor("pcm-tap", PcmTap);`], { type: "application/javascript" }));
-
-// Float32 au taux du micro (souvent 48 kHz) -> PCM 16 bits 16 kHz, ce qu'attend la session.
-function toPcm16(f32, fromRate) {
-  const ratio = fromRate / 16000, n = Math.floor(f32.length / ratio), out = new Int16Array(n);
-  for (let i = 0; i < n; i++) {
-    const a = Math.floor(i * ratio), b = Math.min(f32.length, Math.floor((i + 1) * ratio));
-    let s = 0;
-    for (let j = a; j < b; j++) s += f32[j];
-    const v = Math.max(-1, Math.min(1, s / Math.max(1, b - a)));
-    out[i] = v < 0 ? v * 0x8000 : v * 0x7fff;
-  }
-  return out.buffer;
-}
-
-async function startLive() {
-  const L = live = { ws: null, queue: [], finals: [], partial: "", done: false, stopping: false, node: null };
-  try {
-    // Le son est capté AVANT que la session soit ouverte : les premiers mots
-    // attendent dans `queue` et partent dès que le WebSocket est prêt.
-    await audioCtx.audioWorklet.addModule(PCM_WORKLET);
-    const rate = audioCtx.sampleRate;
-    L.node = new AudioWorkletNode(audioCtx, "pcm-tap");
-    const sink = audioCtx.createGain();
-    sink.gain.value = 0;  // le nœud doit être relié à la sortie pour tourner, mais muet
-    micSource.connect(L.node); L.node.connect(sink); sink.connect(audioCtx.destination);
-    L.node.port.onmessage = (e) => {
-      if (L.done || L.stopping) return;
-      const pcm = toPcm16(e.data, rate);
-      if (L.ws && L.ws.readyState === 1) L.ws.send(pcm); else L.queue.push(pcm);
-    };
-
-    const r = await fetch("/live/init", { method: "POST" });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.url) throw new Error(d.error || "HTTP " + r.status);
-    if (L.done) return;
-
-    const ws = new WebSocket(d.url);
-    ws.binaryType = "arraybuffer";
-    L.ws = ws;
-    ws.onopen = () => {
-      for (const b of L.queue) ws.send(b);
-      L.queue = [];
-      if (L.stopping) ws.send(JSON.stringify({ type: "stop_recording" }));
-    };
-    ws.onmessage = (ev) => onLiveMessage(L, ev.data);
-    ws.onclose = () => finishLive(L);
-  } catch (e) {
-    liveBroken = true;
-    banner("Gladia temps réel indisponible (" + e.message + ") — repli en mode fichier");
-    if (live === L) live = null;
-    L.done = true;
-    if (L.node) try { L.node.disconnect(); } catch (_) {}
-    if (listening && mediaStream) startRecorder();
-  }
-}
-
-function onLiveMessage(L, raw) {
-  let m;
-  try { m = JSON.parse(raw); } catch (_) { return; }
-  if (m.type === "error") { banner("Gladia : " + JSON.stringify(m.data || m).slice(0, 160)); return; }
-  if (m.type !== "transcript" || !m.data) return;
-  const text = ((m.data.utterance && m.data.utterance.text) || "").trim();
-  if (m.data.is_final) { if (text) L.finals.push(text); L.partial = ""; }
-  else L.partial = text;
-  showLive(L);
-  // Gladia a détecté la fin de phrase : on agit tout de suite, sans attendre
-  // la fermeture de la session (post-traitement inutile ici).
-  if (m.data.is_final && text && ($("#vad").checked || L.stopping)) finishLive(L);
-}
-
-function showLive(L) {
-  const said = [...L.finals, L.partial].join(" ").trim();
-  if (!said) return;
-  if (answerMode) { $("#vb-sub").textContent = "« " + said + " »"; return; }
-  $("#transcript").classList.remove("empty");
-  $("#transcript").innerHTML = esc(L.finals.join(" ")) + (L.partial ? ' <span class="partial">' + esc(L.partial) + "</span>" : "");
-}
-
-function finishLive(L) {
-  if (!L || L.done) return;
-  L.done = true;
-  if (live === L) live = null;
-  try {
-    if (L.ws && L.ws.readyState === 1 && !L.stopping) L.ws.send(JSON.stringify({ type: "stop_recording" }));
-    if (L.ws && L.ws.readyState <= 1) L.ws.close();
-  } catch (_) {}
-  if (L.node) try { L.node.disconnect(); } catch (_) {}
-  if (listening) {
-    listening = false;
-    if (rafId) cancelAnimationFrame(rafId);
-    if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
-    $("#mic").classList.remove("rec");
-    setVu(0);
-  }
-  releaseMic();
-
-  const text = cleanText([...L.finals, L.partial].join(" "));
-  if (text && lastVoiceAt && !discard) {
-    $("#latency").textContent = "Gladia temps réel · texte prêt " + Math.round(performance.now() - lastVoiceAt) + " ms après ta dernière syllabe";
-  }
-  if (!text) {
-    transcribing = false;
-    if (discard) { discard = false; return; }
-    $("#mic-vu").textContent = "micro coupé";
-    $("#michint").textContent = "rien entendu — réessaie";
+async function pressTalk() {
+  if (held || listening) return;
+  held = true;
+  if (!(await ensureMic())) { held = false; return; }
+  if (!held) {  // relâché pendant l'ouverture du micro
+    $("#mic-vu").textContent = "micro prêt — maintiens Espace pendant que tu parles";
     return;
   }
-  handleText(text);
+  if (audioCtx.state === "suspended") audioCtx.resume();
+
+  const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
+  recorder = new MediaRecorder(mediaStream, mime ? { mimeType: mime, audioBitsPerSecond: 128000 } : {});
+  chunks = [];
+  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  recorder.onstop = () => onUtterance(mime || "audio/webm");
+  recorder.start(100);
+
+  listening = true;
+  pressedAt = performance.now();
+  $("#mic").classList.add("rec");
+  $("#mic-vu").textContent = "j'écoute… relâche pour envoyer";
+  $("#latency").textContent = "";
+  banner("");
+  loopVu();
 }
 
-// Même nettoyage que voice.clean_command côté serveur.
-function cleanText(t) {
-  return (" " + t + " ").replace(/\s(euh|heu|bah|ben)[,.]?(?=\s)/gi, " ").replace(/\s+/g, " ").trim().replace(/^[\s.,;:]+|[\s.,;:]+$/g, "");
+function releaseTalk() {
+  held = false;
+  if (!listening) return;
+  listening = false;
+  if (rafId) cancelAnimationFrame(rafId);
+  $("#mic").classList.remove("rec");
+  $("#mic-vu").textContent = "transcription…";
+  setVu(0);
+  // Les derniers 100 ms : `stop()` vide le tampon puis déclenche onstop.
+  if (recorder && recorder.state !== "inactive") recorder.stop();
 }
 
-function loopVad() {
+function loopVu() {
   if (!listening || !analyser) return;
   const buf = new Uint8Array(analyser.fftSize);
   analyser.getByteTimeDomainData(buf);
   let sum = 0;
   for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
-  const rms = Math.sqrt(sum / buf.length);
-  setVu(rms);
-
-  if (rms > 0.015) {
-    spoke = true;
-    lastVoiceAt = performance.now();
-    if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
-  } else if (spoke && !silenceTimer && $("#vad").checked) {
-    // En temps réel, c'est Gladia qui coupe (endpointing) : ce minuteur n'est qu'un filet.
-    silenceTimer = setTimeout(() => stopListening(true), live ? 2500 : 850);
-  }
-  rafId = requestAnimationFrame(loopVad);
-}
-
-function stopListening(auto) {
-  if (!listening) return;
-  listening = false;
-  transcribing = true;
-  if (rafId) cancelAnimationFrame(rafId);
-  if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
-  $("#mic").classList.remove("rec");
-  $("#mic-vu").textContent = "transcription…";
-  setVu(0);
-
-  if (live) {
-    // Gladia renvoie la fin de la phrase puis ferme la session ; filet à 3 s.
-    const L = live;
-    L.stopping = true;
-    if (L.ws && L.ws.readyState === 1) L.ws.send(JSON.stringify({ type: "stop_recording" }));
-    releaseMic();
-    setTimeout(() => finishLive(L), 3000);
-    return;
-  }
-  // On laisse `recorder.stop()` déclencher onstop, qui coupera les pistes.
-  try {
-    if (recorder && recorder.state !== "inactive") recorder.stop();
-    else releaseMic();
-  } catch (e) {
-    releaseMic();
-  }
-  if (!auto) console.log("arrêt manuel");
+  setVu(Math.sqrt(sum / buf.length));
+  rafId = requestAnimationFrame(loopVu);
 }
 
 async function onUtterance(mime) {
   const blob = new Blob(chunks, { type: mime });
   chunks = [];
-  if (discard) { discard = false; transcribing = false; return; }
-  if (blob.size < 2000) {
-    transcribing = false;
-    $("#mic-vu").textContent = "micro coupé";
-    $("#michint").textContent = "rien entendu — réessaie";
+  if (discard) { discard = false; return; }
+  if (performance.now() - pressedAt < 400 || blob.size < 2000) {
+    $("#mic-vu").textContent = "trop court — maintiens Espace pendant que tu parles";
     return;
   }
+  $("#mic-vu").textContent = "transcription…";
   try {
     const t0 = performance.now();
     const r = await fetch("/transcribe", { method: "POST", body: blob });
     const d = await r.json();
-    if (!d.text) { transcribing = false; banner("Gladia : " + (d.error || "transcription vide")); $("#mic-vu").textContent = "micro coupé"; return; }
-    $("#latency").textContent = "Gladia mode fichier · " + Math.round(performance.now() - t0) + " ms";
+    if (!d.text) { banner("Gladia : " + (d.error || "transcription vide")); $("#mic-vu").textContent = "micro prêt"; return; }
+    $("#latency").textContent = "Gladia " + (d.model || "") + " · " + ((performance.now() - t0) / 1000).toFixed(1) + " s";
+    $("#mic-vu").textContent = "micro prêt";
     handleText(d.text);
   } catch (e) {
-    transcribing = false;
     banner("transcription impossible : " + e.message);
-    $("#mic-vu").textContent = "micro coupé";
+    $("#mic-vu").textContent = "micro prêt";
   }
 }
 
-// Une phrase transcrite (temps réel ou fichier) : réponse à l'agent, consigne, ou nouvelle tâche.
+// Une phrase transcrite : réponse à l'agent, consigne, ou nouvelle tâche.
 async function handleText(text) {
-  transcribing = false;
   if (discard) { discard = false; return; }
 
   // L'agent attend une réponse : on la lui envoie au lieu de lancer une tâche.
@@ -579,14 +413,13 @@ async function handleText(text) {
     return;
   }
 
+  $("#transcript").classList.remove("empty");
+  $("#transcript").textContent = "« " + text + " »";
+
   // Un agent est déjà ouvert et attend (même après un rechargement de la page) :
   // la consigne part sur sa page courante au lieu de relancer un navigateur.
   if (conversationMode || (state.running && state.status === "listening")) {
-    $("#transcript").classList.remove("empty");
-    $("#transcript").textContent = "« " + text + " »";
-    $("#mic-vu").textContent = "micro coupé";
     $("#michint").textContent = "consigne envoyée — l'agent travaille";
-    instructSentAt = performance.now();
     try {
       const r2 = await fetch("/instruct", {
         method: "POST",
@@ -599,21 +432,27 @@ async function handleText(text) {
     return;
   }
 
-  $("#transcript").classList.remove("empty");
-  $("#transcript").textContent = "« " + text + " »";
   $("#task").value = text;
-  $("#mic-vu").textContent = "micro coupé";
-  $("#michint").textContent = "appuie sur le micro ou espace";
   if ($("#autostart").checked) startAgent();
 }
 
-$("#mic").addEventListener("click", () => { listening ? stopListening(false) : startListening(); });
+// Maintenir = parler. Espace (sauf dans un champ texte) ou le bouton micro.
+const typing = () => ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName);
 addEventListener("keydown", (e) => {
-  if (e.code === "Space" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) {
-    e.preventDefault();
-    listening ? stopListening(false) : startListening();
-  }
+  if (e.code !== "Space" || typing()) return;
+  e.preventDefault();
+  if (!e.repeat) pressTalk();
 });
+addEventListener("keyup", (e) => {
+  if (e.code !== "Space" || typing()) return;
+  e.preventDefault();
+  releaseTalk();
+});
+// Fenêtre qui perd le focus pendant l'appui : on n'enregistre pas indéfiniment.
+addEventListener("blur", releaseTalk);
+$("#mic").addEventListener("pointerdown", (e) => { e.preventDefault(); $("#mic").setPointerCapture(e.pointerId); pressTalk(); });
+$("#mic").addEventListener("pointerup", releaseTalk);
+$("#mic").addEventListener("pointercancel", releaseTalk);
 
 // ---------- lancement ----------
 async function startAgent() {
@@ -627,7 +466,6 @@ async function startAgent() {
     pause: 0.35
   };
   conversationMode = body.interactive;
-  micFailed = false;
   $("#log").innerHTML = ""; lastRendered = 0;
   try {
     const r = await fetch("/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -652,8 +490,8 @@ const isYes = (t) => /\b(oui|ouais|yes|ok|d'accord|valide|confirme|envoye|envoye
 async function reply(payload, endpoint) {
   // On jette la phrase en cours seulement si une écoute tourne : sinon `discard`
   // resterait levé et avalerait la prochaine consigne.
-  discard = listening || !!live;
-  if (listening) stopListening(false);
+  discard = listening;
+  if (listening) releaseTalk();
   $("#voicebar").classList.remove("on");
   await fetch(endpoint || "/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
 }
@@ -661,16 +499,14 @@ async function reply(payload, endpoint) {
 function enterAnswerMode(kind) {
   answerMode = kind;
   discard = false;
-  $("#vb-sub").textContent = "le micro s'ouvre tout seul — parle";
-  $("#mic-vu").textContent = "j'écoute ta réponse…";
-  if (!listening) startListening();
+  $("#vb-sub").textContent = "maintiens Espace et réponds, ou clique";
 }
 
 function leaveAnswerMode() {
   if (answerMode) {
     answerMode = null;
-    discard = listening || !!live;
-    if (listening) stopListening(false);
+    discard = listening;
+    if (listening) releaseTalk();
   }
 }
 
@@ -678,7 +514,6 @@ $("#vb-yes").addEventListener("click", () => { $("#vb-sub").textContent = "valid
 $("#vb-no").addEventListener("click", () => { $("#vb-sub").textContent = "annulé"; reply({ approved: false }, "/confirm"); });
 
 // ---------- divers ----------
-$("#live").addEventListener("change", () => { liveBroken = false; });
 $("#scenario").addEventListener("change", (e) => { $("#url").value = e.target.value; });
 
 fetch("/profile").then((r) => r.json())

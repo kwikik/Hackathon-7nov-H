@@ -97,6 +97,14 @@ TOOL_SPECS: list[dict[str, Any]] = [
         ["url"],
     ),
     _tool(
+        "web_search",
+        "Cherche sur les sites officiels (service-public, ANTS, impots, CAF, ameli, URSSAF...) la page exacte "
+        "d'une démarche. Renvoie titres, URL et extraits. À utiliser AVANT de naviguer quand tu ne connais pas "
+        "l'URL de la démarche, au lieu d'explorer les menus.",
+        {"query": {"type": "string", "description": "La démarche, en français. Ex : « déclarer la vente de mon véhicule »."}},
+        ["query"],
+    ),
+    _tool(
         "wait",
         "Attend que la page finisse de charger (utile sur les sites lents ou les redirections JavaScript).",
         {"seconds": {"type": "number", "minimum": 0.5, "maximum": 8}},
@@ -247,8 +255,28 @@ class PageController:
         """Exécute un tool call, retourne le contenu du message `tool` à renvoyer au modèle."""
         name = call["name"]
         args = call.get("args") or {}
-        if name not in ("answer", "request_confirmation", "ask_user"):
+        if name not in ("answer", "request_confirmation", "ask_user", "web_search"):
             self._dirty = True
+
+        if name == "web_search":
+            # Recherche hors navigateur : la page ne bouge pas, pas de nouvelle capture.
+            from search import SearchError, search
+
+            query = str(args.get("query", "")).strip()
+            if not query:
+                return json.dumps({"ok": False, "error": "query vide"}, ensure_ascii=False)
+            try:
+                results = search(query)
+            except (SearchError, Exception) as exc:  # noqa: BLE001 - l'agent doit pouvoir naviguer sans
+                return json.dumps(
+                    {"ok": False, "error": f"recherche indisponible : {exc}. Navigue directement sur le site officiel."},
+                    ensure_ascii=False,
+                )
+            top = results[0]["url"] if results else "aucun résultat"
+            return json.dumps(
+                {"ok": True, "message": f"{len(results)} résultat(s) — {top}", "results": results},
+                ensure_ascii=False,
+            )
 
         if name == "answer":
             return json.dumps({"ok": True, "finished": True}, ensure_ascii=False)

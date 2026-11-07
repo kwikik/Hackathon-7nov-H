@@ -43,6 +43,9 @@ Voix  ──▶ Gladia (STT)  ──▶ consigne
   c'est une barrière dans le code.
 - **Zéro invention de données.** Les valeurs saisies viennent d'un profil local (`profile.json`).
   Si une donnée obligatoire manque, l'agent appelle `ask_user` au lieu de remplir au hasard.
+- **Il cherche avant de naviguer.** Un outil `web_search` (Linkup) trouve la page exacte de la
+  démarche, sur les seuls sites officiels. Mesuré : « déclarer la vente de mon véhicule » en
+  **3 pas** (recherche → page officielle → réponse) au lieu de 9 en explorant les menus.
 - **Mode hors-ligne.** `--mock` rejoue le scénario complet sans clé API, pour répéter avant la scène.
 
 ## Démarrage
@@ -69,8 +72,11 @@ HOLO_THINKING=1
 
 # Gladia — speech-to-text (docs.gladia.io)
 GLADIA_API_KEY=...
-# silence (s) qui termine une phrase en mode temps réel
-GLADIA_ENDPOINTING=0.6
+# solaria-3 (défaut, le plus précis en français) ou solaria-1 (un peu plus rapide)
+GLADIA_MODEL=solaria-3
+
+# Linkup — recherche web pour agents (app.linkup.so)
+LINKUP_API_KEY=...
 
 # serveur de démo
 DEMO_PORT=8765
@@ -115,9 +121,23 @@ python agent.py --demo --interactive --pause 0.35 --model holo4-35b-a3b
 
 ## Interface de démo
 
-```bash
-python demo_server.py      # -> http://localhost:8765  (ou start_demo.bat)
+**Ouvrir** (Windows) : double-clic sur `start_demo.bat`, ou dans un terminal à la racine :
+
+```powershell
+.\start_demo.bat
 ```
+
+Le serveur démarre dans une fenêtre réduite « Cerfa demo » et le navigateur s'ouvre sur
+http://localhost:8765. Si le serveur tourne déjà, le script ouvre juste la page.
+
+**Fermer** : arrête le serveur, l'agent en cours et la fenêtre Chromium de l'agent
+(tous les serveurs sur le port, y compris un vieux serveur oublié) :
+
+```powershell
+.\stop_demo.bat
+```
+
+Sans les scripts (macOS / Linux) : `python demo_server.py`, puis Ctrl+C pour arrêter.
 
 La page (`demo/app.html`) écoute la voix (micro du navigateur → Gladia), lance l'agent et affiche en direct :
 
@@ -125,7 +145,7 @@ La page (`demo/app.html`) écoute la voix (micro du navigateur → Gladia), lanc
 - la capture de l'écran de l'agent (rafraîchie à chaque pas),
 - le journal des actions (tool, arguments, résultat, durée),
 - la question de l'agent quand une donnée manque, et la demande de confirmation avant envoi,
-  auxquelles on peut répondre à la voix (« oui », « vas-y ») ou par les boutons.
+  auxquelles on peut répondre à la voix (maintenir Espace, « oui », « vas-y ») ou par les boutons.
 
 **Mode conversation** (case cochée par défaut) : le navigateur reste ouvert entre deux consignes.
 Chaque nouvelle phrase est envoyée à `/instruct` et l'agent la joue sur la même page, avec la
@@ -134,14 +154,15 @@ session et le formulaire en cours. Sans cette case, chaque consigne relance un n
 La confirmation avant envoi est **active par défaut**. La case « ne jamais demander de
 confirmation » la coupe pour un run.
 
-**Transcription temps réel** (case cochée par défaut) : le micro part en continu sur un WebSocket
-Gladia, le texte s'écrit pendant que tu parles et Gladia coupe tout seul à la fin de la phrase
-(`GLADIA_ENDPOINTING`). Un vocabulaire personnalisé (ANTS, Cerfa, FranceConnect…) est envoyé à
-l'ouverture. Si la session échoue, l'interface repasse en mode fichier sans perdre la phrase.
+**Micro en push-to-talk** : maintiens **Espace** (ou le bouton micro) pendant que tu parles,
+relâche pour envoyer. Pas de coupure automatique au silence. L'audio part à Gladia avec le
+modèle **Solaria-3** (le plus précis en français, `GLADIA_MODEL`) et un vocabulaire imposé
+(ANTS, Cerfa, FranceConnect…). Le serveur garde sa connexion à Gladia ouverte en permanence :
+compter environ 3 s entre le relâchement et le texte. Le temps mesuré s'affiche sous le micro.
 
 Le serveur refuse toute requête POST venue d'une autre origine que `localhost:8765`, et exige du JSON.
 
-Endpoints : `GET /state`, `GET /live.png`, `GET /profile`, `GET /slides`, `POST /live/init`, `POST /transcribe`,
+Endpoints : `GET /state`, `GET /live.png`, `GET /profile`, `GET /slides`, `POST /transcribe`,
 `POST /start`, `POST /instruct`, `POST /stop`, `POST /confirm`, `POST /answer`.
 Le log brut de chaque run est écrit dans `runs/agent.log` et `runs/state.json`.
 
@@ -166,8 +187,10 @@ planner.py          HoloPlanner (function calling) + MockPlanner (hors-ligne)
 holo_client.py      client Models API : throttle free tier, retries
 controller.py       tools exposés au modèle + exécution Playwright + garde-fou d'envoi
 voice.py            Gladia : audio → texte
+search.py           Linkup : recherche de la démarche sur les sites officiels
 demo_server.py      serveur de démo (stdlib) + API
-start_demo.bat      lance le serveur de démo (Windows)
+start_demo.bat      ouvre la démo : serveur + navigateur (Windows)
+stop_demo.bat       ferme la démo : serveur, agent, Chromium (Windows)
 profile.json        données personnelles utilisées par l'agent
 .env.example        modèle de configuration (copier en .env)
 

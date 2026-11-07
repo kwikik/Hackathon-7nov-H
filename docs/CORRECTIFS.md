@@ -9,7 +9,7 @@
 
 1. [Sécurité du garde-fou](#1-sécurité-du-garde-fou)
 2. [Holo](#2-holo)
-3. [Gladia](#3-gladia)
+3. [Gladia](#3-gladia) · [Linkup](#3-bis-linkup-recherche-web)
 4. [Bugs et fragilités](#4-bugs-et-fragilités)
 5. [Hygiène du repo](#5-hygiène-du-repo)
 
@@ -45,17 +45,34 @@ Test S3 (vérifié) : origine étrangère → `403`, `text/plain` → `403`, mê
 
 | # | Amélioration | État | Où |
 |---|---|---|---|
-| G1 | **STT temps réel** : WebSocket Gladia (`POST /v2/live`, modèle `solaria-1`, PCM 16 kHz). Le texte s'écrit pendant qu'on parle | ✅ | `voice.py` — `init_live_session`, `demo_server.py` — `/live/init`, `demo/app.html` — `startLive` |
-| G2 | Fin de phrase détectée par Gladia (`endpointing`, défaut 0.6 s, réglable `GLADIA_ENDPOINTING`) au lieu de notre VAD à 850 ms + upload + polling | ✅ | `voice.py` |
+| G1 | ~~STT temps réel (WebSocket, Solaria-1)~~ : retiré. Coupait les phrases à la première pause (endpointing) et transcrivait moins bien que Solaria-3 | ❌ abandonné | — |
+| G2 | **Push-to-talk** : on maintient Espace (ou le bouton micro) pour parler, on relâche pour envoyer. Plus de coupure automatique au silence | ✅ | `demo/app.html` — `pressTalk`, `releaseTalk` |
 | G3 | **Vocabulaire personnalisé** : ANTS, Cerfa, FranceConnect, CAF, URSSAF, carte grise… | ✅ | `voice.py` — `VOCABULARY` |
-| G4 | Repli automatique en mode fichier si le temps réel échoue, sans perdre la phrase en cours. Case « Gladia temps réel » dans l'interface | ✅ | `demo/app.html` |
-| G5 | Latence affichée sous le micro | ✅ | `demo/app.html` — `#latency` |
-| G6 | Garder une seule session ouverte toute la démo (jusqu'à 3 h) au lieu d'une par phrase | ⬜ | `demo/app.html` |
-| G7 | Tester au vrai micro, en salle bruyante ; ajuster `GLADIA_ENDPOINTING` (0.4–0.8) | ⬜ | — |
+| G4 | Modèle **Solaria-3** (le plus précis de Gladia en français, pre-recorded uniquement), réglable `GLADIA_MODEL` | ✅ | `voice.py` |
+| G5 | Temps de transcription affiché sous le micro | ✅ | `demo/app.html` — `#latency` |
+| G6 | **Connexion préchauffée** : session HTTPS réutilisée + ping toutes les 25 s. La 1ʳᵉ requête coûtait ~1,6 s de DNS + TLS | ✅ | `voice.py` — `_session`, `keep_warm` |
+| G7 | Micro ouvert une seule fois et gardé (pas de syllabe mangée à chaque appui) ; `noiseSuppression` coupée (abîme la voix) | ✅ | `demo/app.html` — `ensureMic` |
+| G8 | Tester au vrai micro, en salle bruyante | ⬜ | — |
 
-Test G1 (vérifié) : Chromium avec micro simulé sur `runs/voix_test.wav` → 4 transcriptions partielles affichées,
-consigne finale remplie, 0 erreur JS. La latence affichée pendant ce test n'est pas représentative
-(le fichier simulé tourne en boucle, il n'y a jamais de vrai silence).
+Mesures (réseau du 7 nov) : connexion froide 7,9 s entre le relâchement et le texte ; connexion
+chaude **2,8 s**. Détail : envoi du fichier 0,4 s, Solaria-3 ~2,3 s (Solaria-1 ~1,8 s, mais
+moins précis : « en voilà » au lieu de « envoie-la » sur le même enregistrement).
+Test (vérifié) : Chromium avec micro simulé, appui court ignoré, maintien 4 s puis relâche →
+consigne remplie, 0 erreur JS.
+
+## 3 bis. Linkup (recherche web)
+
+| # | Amélioration | État | Où |
+|---|---|---|---|
+| L1 | Outil **`web_search`** pour Holo : trouve la page exacte d'une démarche avant de naviguer | ✅ | `search.py`, `controller.py` |
+| L2 | Recherche limitée aux **sites officiels** (`includeDomains` : service-public, ANTS, impots, CAF, ameli, URSSAF, France Travail…). Legifrance retiré (textes de loi, pas des démarches) | ✅ | `search.py` — `OFFICIAL_DOMAINS` |
+| L3 | Prompt : chercher plutôt qu'explorer les menus ; si la recherche échoue, l'agent navigue lui-même | ✅ | `planner.py` — règle 7 |
+| L4 | Mode hors-ligne : `web_search` n'est pas simulé (le mock remplit le formulaire local sans chercher) | ⏸️ | — |
+| L5 | Limiter aussi `navigate` aux domaines officiels (couvrirait S5) | ⬜ | `controller.py` |
+
+Mesures (vérifié) : `depth: "fast"`, 1,2 à 1,7 s par recherche. Run réel Holo « trouve la page
+officielle pour déclarer la vente de mon véhicule » : `web_search` → `navigate` vers la fiche
+F1707 de service-public → `answer`, **3 pas** (9 pas sans recherche, mesure ANTS du 7 nov).
 
 ## 4. Bugs et fragilités
 
@@ -68,7 +85,8 @@ consigne finale remplie, 0 erreur JS. La latence affichée pendant ce test n'est
 | B5 | `discard` pouvait rester levé et avaler la consigne suivante | ✅ | `demo/app.html` — `reply`, `leaveAnswerMode` |
 | B6 | Le micro se rouvrait pendant la transcription / juste après l'envoi d'une consigne en mode conversation | ✅ | `demo/app.html` — `render` |
 | B7 | `agent.log` ouvert à chaque run et jamais fermé | ⬜ | `demo_server.py` — `_start` |
-| B8 | `start_demo.bat` n'ouvre pas le navigateur malgré son commentaire | ⬜ | `start_demo.bat` |
+| B8 | `start_demo.bat` n'ouvre pas le navigateur malgré son commentaire. Réécrit : attend le serveur puis ouvre la page ; nouveau `stop_demo.bat` pour tout fermer | ✅ | `start_demo.bat`, `stop_demo.bat` |
+| B9 | Deux serveurs pouvaient partager le port 8765 sous Windows (requêtes réparties au hasard) | ✅ | `demo_server.py` — `main` |
 
 ## 5. Hygiène du repo
 
