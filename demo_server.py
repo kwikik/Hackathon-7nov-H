@@ -222,7 +222,8 @@ class Handler(BaseHTTPRequestHandler):
                 cmd.append("--mock")
             if payload.get("headless"):
                 cmd.append("--headless")
-            if payload.get("no_confirm", True):
+            # Garde-fou actif par défaut : il faut le demander explicitement pour le couper.
+            if payload.get("no_confirm"):
                 cmd.append("--no-confirm")
             if payload.get("model"):
                 cmd.extend(["--model", str(payload["model"])])
