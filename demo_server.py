@@ -10,7 +10,8 @@ Endpoints
     GET  /state       état courant de l'agent (JSON)
     GET  /profile     profil utilisateur (JSON)
     GET  /live.png    dernière capture de l'écran
-    POST /transcribe  audio (webm) -> texte via Gladia
+    POST /live/init   ouvre une session Gladia temps réel -> {id, url} (WebSocket)
+    POST /transcribe  audio (webm) -> texte via Gladia (secours, mode fichier)
     POST /start       {task, url, interactive, ...} -> lance agent.py --demo
     POST /instruct    {task} ou {quit} -> consigne suivante en mode conversation
     POST /stop        tue le run en cours
@@ -24,7 +25,6 @@ import os
 import subprocess
 import sys
 import threading
-import tempfile
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -33,6 +33,8 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).parent
 RUNS = ROOT / "runs"
 PORT = int(os.environ.get("DEMO_PORT", "8765"))
+
+ALLOWED_ORIGINS = {f"http://localhost:{PORT}", f"http://127.0.0.1:{PORT}"}
 
 _lock = threading.Lock()
 _process: subprocess.Popen | None = None
@@ -86,7 +88,7 @@ class Handler(BaseHTTPRequestHandler):
             # Auto-réparation : si plus aucun process ne tourne, un état "en attente"
             # est un fantôme (run tué, timeout, serveur redémarré). Sans ça, le bouton
             # reste désactivé et la boîte de dialogue tourne dans le vide.
-            if not data["running"] and data.get("status") in ("running", "awaiting_confirmation", "awaiting_input"):
+            if not data["running"] and data.get("status") in ("running", "listening", "awaiting_confirmation", "awaiting_input"):
                 data["previous_status"] = data["status"]
                 data["status"] = "interrupted"
                 data["awaiting"] = None
@@ -122,11 +124,37 @@ class Handler(BaseHTTPRequestHandler):
 
     # ---------- POST ----------
 
+    def _refuse_foreign(self, path: str, body: bytes) -> str | None:
+        """Bloque les requêtes venues d'une autre page web (CSRF).
+
+        Sans ça, n'importe quelle page ouverte par l'agent pourrait faire
+        `fetch("http://localhost:8765/confirm", {mode: "no-cors", ...})` et valider
+        l'envoi à ta place. Un navigateur envoie toujours `Origin` sur un POST :
+        s'il est absent, c'est un client hors navigateur (curl), pas une page web.
+        """
+        origin = self.headers.get("Origin")
+        if origin and origin not in ALLOWED_ORIGINS:
+            return f"origine refusée : {origin}"
+        # /transcribe reçoit de l'audio brut ; tout le reste doit être du JSON.
+        # Un POST cross-origin en application/json déclenche un preflight CORS
+        # que ce serveur ne valide jamais : double barrière.
+        if body and path != "/transcribe":
+            ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            if ctype != "application/json":
+                return "Content-Type application/json obligatoire"
+        return None
+
     def do_POST(self) -> None:
         path = urlparse(self.path).path
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length) if length else b""
 
+        refused = self._refuse_foreign(path, body)
+        if refused:
+            return _json(self, {"error": refused}, 403)
+
+        if path == "/live/init":
+            return self._live_init()
         if path == "/transcribe":
             return self._transcribe(body)
         if path == "/start":
@@ -134,13 +162,10 @@ class Handler(BaseHTTPRequestHandler):
         if path in ("/confirm", "/answer"):
             return self._answer(path, body)
         if path == "/stop":
-            global _process
             with _lock:
-                if _process and _process.poll() is None:
-                    _process.kill()
-                    _process = None
-                    return _json(self, {"stopped": True})
-                _process = None
+                stopped = _stop_agent()
+            if stopped:
+                return _json(self, {"stopped": True})
             return _json(self, {"stopped": False, "reason": "aucun run en cours"})
         if path == "/instruct":
             return self._instruct(body)
@@ -162,6 +187,24 @@ class Handler(BaseHTTPRequestHandler):
         (RUNS / "instruction.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return _json(self, {"queued": True, "task": payload.get("task", "")})
 
+    def _live_init(self) -> None:
+        """Ouvre une session Gladia temps réel et renvoie l'URL WebSocket au navigateur.
+
+        La clé API reste côté serveur : le navigateur ne reçoit que l'URL de session.
+        """
+        try:
+            from voice import GladiaError, init_live_session
+
+            session = init_live_session()
+            _log_gladia("live", 0, f"session {session.get('id', '?')}")
+            return _json(self, session)
+        except GladiaError as exc:
+            _log_gladia("erreur", 0, f"live: {exc}")
+            return _json(self, {"error": str(exc)}, 503)
+        except Exception as exc:  # noqa: BLE001
+            _log_gladia("exception", 0, f"live: {type(exc).__name__}: {exc}")
+            return _json(self, {"error": f"{type(exc).__name__}: {exc}"}, 500)
+
     def _transcribe(self, body: bytes) -> None:
         if not body:
             return _json(self, {"error": "audio vide"}, 400)
@@ -169,15 +212,14 @@ class Handler(BaseHTTPRequestHandler):
         if body[:4] == b"RIFF":
             suffix = ".wav"
         RUNS.mkdir(exist_ok=True)
-        fd, tmp_name = tempfile.mkstemp(suffix=suffix, dir=str(RUNS))
-        os.close(fd)
-        tmp = Path(tmp_name)
-        tmp.write_bytes(body)
+        # On garde le dernier audio reçu : si Gladia renvoie du vide, on peut l'écouter.
+        audio = RUNS / f"last_audio{suffix}"
+        audio.write_bytes(body)
         try:
             from voice import GladiaError, clean_command, transcribe
 
-            text = clean_command(transcribe(tmp))
-            _log_gladia("ok", len(body), text[:120] or "(texte vide)")
+            text = clean_command(transcribe(audio))
+            _log_gladia("ok", len(body), text[:120] or f"(texte vide — écoute {audio.name})")
             return _json(self, {"text": text})
         except GladiaError as exc:
             _log_gladia("erreur", len(body), str(exc))
@@ -185,8 +227,6 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as exc:  # noqa: BLE001
             _log_gladia("exception", len(body), f"{type(exc).__name__}: {exc}")
             return _json(self, {"error": f"{type(exc).__name__}: {exc}"}, 500)
-        finally:
-            tmp.unlink(missing_ok=True)
 
     def _start(self, body: bytes) -> None:
         global _process
@@ -202,13 +242,14 @@ class Handler(BaseHTTPRequestHandler):
             task = (payload.get("task") or "").strip()
             if not payload.get("interactive") and not task:
                 task = "Remplis ce formulaire de demande administrative avec mes informations."
-            url = (payload.get("url") or "").strip() or (ROOT / "test_form.html").as_uri()
+            url = (payload.get("url") or "").strip() or (ROOT / "demo" / "test_form.html").as_uri()
             RUNS.mkdir(exist_ok=True)
             (RUNS / "answer.json").unlink(missing_ok=True)
             (RUNS / "state.json").unlink(missing_ok=True)
 
             cmd = [
                 sys.executable,
+                "-u",  # sortie non bufferisée : agent.log se remplit en direct
                 str(ROOT / "agent.py"),
                 "--demo",
                 "--url",
@@ -245,6 +286,31 @@ class Handler(BaseHTTPRequestHandler):
         return _json(self, {"ok": True})
 
 
+def _stop_agent() -> bool:
+    """Arrête l'agent ET son navigateur. Appeler sous `_lock`.
+
+    `Popen.kill()` ne tue que le process Python : sous Windows, Playwright et les
+    fenêtres Chromium peuvent lui survivre. On tue donc tout l'arbre.
+    """
+    global _process
+    proc, _process = _process, None
+    if not proc or proc.poll() is not None:
+        return False
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(proc.pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    else:
+        proc.kill()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+    return True
+
+
 def main() -> None:
     RUNS.mkdir(exist_ok=True)
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
@@ -253,6 +319,10 @@ def main() -> None:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\narrêt")
+    finally:
+        # Ctrl+C sur le serveur ne doit pas laisser un navigateur orphelin.
+        with _lock:
+            _stop_agent()
 
 
 if __name__ == "__main__":

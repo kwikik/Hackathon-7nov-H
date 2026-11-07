@@ -5,6 +5,23 @@
 
 ---
 
+## Sommaire
+
+1. [État global](#1-état-global-en-une-ligne)
+2. [Bugs corrigés](#2-ce-qui-a-été-corrigé-bugs-bloquants)
+3. [Architecture livrée](#3-architecture-livrée)
+4. [Résultats de test](#4-résultats-de-test-sorties-réelles)
+5. [Décisions techniques](#5-décisions-techniques-et-pourquoi)
+6. [Écarts avec le ROADMAP](#6-écarts-avec-le-roadmap)
+7. [Points de vigilance](#7-points-de-vigilance)
+8. [Suite immédiate](#8-suite-immédiate-priorisée)
+9. [Comment reproduire](#9-comment-reproduire)
+10. [Site cible : ANTS](#10-site-cible--ce-quon-a-mesuré-sur-ants)
+
+[← Index de la documentation](README.md)
+
+---
+
 ## 1. État global en une ligne
 
 **Le moteur fonctionne de bout en bout avec le vrai modèle Holo et la vraie API Gladia.**

@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 from runner import build_planner, make_file_confirmer, run, set_status, terminal_confirmer
 
 ROOT = Path(__file__).parent
-DEFAULT_URL = (ROOT / "test_form.html").as_uri()
+DEFAULT_URL = (ROOT / "demo" / "test_form.html").as_uri()
 DEFAULT_TASK = (
     "Remplis ce formulaire de demande administrative avec mes informations "
     "personnelles, vérifie que chaque champ est correct, puis envoie-le."
@@ -49,6 +49,8 @@ def conversation(page, profile: dict, args, confirm, model_label: str) -> dict:
     print(f"\n[conversation] navigateur ouvert sur {page.url}")
     print("[conversation] en attente de consignes…")
     last: dict = {"status": "listening", "final_url": page.url}
+    planner = None
+    label = model_label
 
     # Consigne de départ éventuelle (saisie dans l'interface avant le lancement)
     first = (args.task or "").strip()
@@ -77,9 +79,14 @@ def conversation(page, profile: dict, args, confirm, model_label: str) -> dict:
         if not task:
             continue
 
-        planner, label = build_planner(
-            task, profile, mock=args.mock, model=args.model, auto_confirm=args.no_confirm
-        )
+        # Un seul planner pour toute la conversation : le modèle se souvient des
+        # consignes précédentes. Après une erreur, on repart d'un historique propre.
+        if planner is None:
+            planner, label = build_planner(
+                task, profile, mock=args.mock, model=args.model, auto_confirm=args.no_confirm
+            )
+        else:
+            planner.new_task(task)
         print(f"\n[conversation] consigne : {task}")
         try:
             last = run(
@@ -98,6 +105,7 @@ def conversation(page, profile: dict, args, confirm, model_label: str) -> dict:
             last["final_url"] = page.url
         except Exception as exc:  # noqa: BLE001 - une consigne qui casse ne doit pas fermer le navigateur
             print(f"[conversation] erreur : {type(exc).__name__}: {exc}")
+            planner = None
             last = {"status": "error", "error": f"{type(exc).__name__}: {exc}", "final_url": page.url}
 
 
@@ -109,7 +117,7 @@ def main() -> int:
     parser.add_argument("--mock", action="store_true", help="pilote la boucle sans appeler Holo")
     parser.add_argument("--headless", action="store_true", help="navigateur invisible")
     parser.add_argument("--demo", action="store_true", help="confirmation via le dashboard web")
-    parser.add_argument("--model", default=None, help="ID de modèle Holo (défaut: holo3-1-35b-a3b)")
+    parser.add_argument("--model", default=None, help="ID de modèle Holo (défaut: HOLO_MODEL du .env, sinon holo4-35b-a3b)")
     parser.add_argument("--max-steps", type=int, default=30)
     parser.add_argument("--pause", type=float, default=0.0, help="secondes entre deux actions (lisibilité démo)")
     parser.add_argument(

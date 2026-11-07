@@ -195,14 +195,20 @@ class PageController:
         self.page = page
         self._is_confirmed = is_confirmed or (lambda: False)
         self._last_png: bytes = self._BLANK_PNG
+        # Vrai tant qu'une action a pu changer l'écran depuis la dernière capture.
+        # Le runner capture après chaque lot d'actions (pour l'interface) ; le planner
+        # réutilise cette image au lieu d'en refaire une : une capture par pas, pas deux.
+        self._dirty = True
 
     # ---------- observation ----------
 
-    def screenshot_b64(self) -> tuple[str, int, int]:
-        try:
-            self._last_png = self.page.screenshot(type="png")
-        except Exception as exc:  # page fermée, crash de rendu : on réutilise la dernière image
-            print(f"   [capture] echec ({type(exc).__name__}), on garde la precedente")
+    def screenshot_b64(self, fresh: bool = False) -> tuple[str, int, int]:
+        if fresh or self._dirty:
+            try:
+                self._last_png = self.page.screenshot(type="png")
+                self._dirty = False
+            except Exception as exc:  # page fermée, crash de rendu : on réutilise la dernière image
+                print(f"   [capture] echec ({type(exc).__name__}), on garde la precedente")
         size = self.page.viewport_size or {"width": 1280, "height": 800}
         return base64.b64encode(self._last_png).decode(), size["width"], size["height"]
 
@@ -241,6 +247,8 @@ class PageController:
         """Exécute un tool call, retourne le contenu du message `tool` à renvoyer au modèle."""
         name = call["name"]
         args = call.get("args") or {}
+        if name not in ("answer", "request_confirmation", "ask_user"):
+            self._dirty = True
 
         if name == "answer":
             return json.dumps({"ok": True, "finished": True}, ensure_ascii=False)

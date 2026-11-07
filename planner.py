@@ -35,15 +35,29 @@ Decide the next step and call the tools.
 1. Never invent personal data. If a required field has no value in USER DATA, call ask_user.
 2. Never click an irreversible control (Envoyer, Valider, Soumettre, Payer, Signer) before calling
    request_confirmation. The harness blocks such clicks.
-3. A click on a form field must be immediately followed by a `type` call carrying the value.
+3. A click on a form field must be immediately followed by a `type` call carrying the value, IN THE SAME
+   RESPONSE: return both tool calls together (click then type). When several empty fields are visible on
+   the screenshot, fill them all in one response (click, type, click, type...). Each round trip costs
+   seconds: batch every action whose target you can already see.
 4. Dismiss cookie banners or popups before touching the form.
 5. Verify what you typed by reading the <page> block, then fill the next empty field.
 6. If a page looks blank, if a click changes nothing, or if you took the wrong path: never repeat the
    same action. Use `wait` (2-3 s), then `go_back`, or `navigate` straight to the exact URL of the
    procedure. The <page> block always carries `visible_text`: read it before deciding the page is empty.
-7. When the form is filled and the submission is confirmed, call `answer`. `answer` is the only way
+7. If the current page is blank (about:blank) or unrelated to the TASK, call `navigate` first. Use the
+   website the user named; otherwise pick the official site for the procedure (service-public.gouv.fr,
+   ants.gouv.fr, impots.gouv.fr, caf.fr, ameli.fr...). Each new instruction may target another site.
+8. When the form is filled and the submission is confirmed, call `answer`. `answer` is the only way
    to stop: never stop without it.
+9. The user may give a follow-up instruction inside <new_instruction> tags. It replaces the TASK above,
+   but everything you already did and saw stays valid context (same browser, same page, same session).
 """
+
+NEW_INSTRUCTION = (
+    "<new_instruction>\n{task}\n</new_instruction>\n"
+    "This is the user's next instruction, on the page you are already on. "
+    "Use what you learned from the previous instructions."
+)
 
 
 def strip_accents(text: str) -> str:
@@ -106,6 +120,24 @@ class HoloPlanner:
             )
         self.messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
         self.last_reasoning: str | None = None
+        self._pending: list[str] = []  # tool calls émis mais pas encore soldés par `record`
+
+    def new_task(self, task: str) -> None:
+        """Mode conversation : enchaîne une consigne sans effacer l'historique.
+
+        Le modèle garde ce qu'il a fait et vu, donc « et maintenant envoie-le »
+        a un sens. Les anciennes captures sont déjà évincées par `_trim_images`.
+        """
+        # Un run interrompu (refus, erreur, `answer` au milieu d'un lot) peut laisser des
+        # tool calls sans réponse : l'API refuse alors tout l'historique. On les solde.
+        for call_id in self._pending:
+            self.messages.append({
+                "role": "tool",
+                "tool_call_id": call_id,
+                "content": json.dumps({"ok": False, "skipped": "run terminé avant cette action"}),
+            })
+        self._pending = []
+        self.messages.append({"role": "user", "content": NEW_INSTRUCTION.format(task=task)})
 
     def next_tool_calls(self, controller, ctx: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         png_b64, _, _ = controller.screenshot_b64()
@@ -146,11 +178,14 @@ class HoloPlanner:
             assistant_msg["tool_calls"] = serialized
         # On ne renvoie jamais le raisonnement dans l'historique (doc H Company).
         self.messages.append(assistant_msg)
+        self._pending = [c["id"] for c in calls]
         return calls
 
     def record(self, results: list[tuple[dict[str, Any], str]]) -> None:
         for call, content in results:
             self.messages.append({"role": "tool", "tool_call_id": call["id"], "content": content})
+            if call["id"] in self._pending:
+                self._pending.remove(call["id"])
 
 
 # --------------------------------------------------------------------------- mock
@@ -199,6 +234,12 @@ class MockPlanner:
 
     def record(self, results: list[tuple[dict[str, Any], str]]) -> None:
         return None
+
+    def new_task(self, task: str) -> None:
+        # Nouvelle consigne : on rejoue le scénario sur la page courante.
+        self.done_fields.clear()
+        self.confirm_requested = False
+        self.submit_clicked = False
 
     def next_tool_calls(self, controller, ctx: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         ctx = ctx or {}

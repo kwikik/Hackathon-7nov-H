@@ -84,7 +84,7 @@ Limites à ne pas promettre : CAPTCHA, double authentification, FranceConnect (s
 ## Structure du repo
 ```
 agent.py          boucle agent (Playwright + Holo)
-test_form.html    formulaire local pour développer sans dépendre d'un site
+demo/test_form.html formulaire local pour développer sans dépendre d'un site
 requirements.txt
 .env.example
 ```

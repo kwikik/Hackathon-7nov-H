@@ -85,6 +85,60 @@ def transcribe(path: str | Path, language: str = "fr") -> str:
     raise GladiaError(f"timeout après {TIMEOUT}s sur le job {job_id}")
 
 
+# --------------------------------------------------------------------------- temps réel
+
+# Mots que le STT générique écorche et que le jury va entendre : on les impose.
+VOCABULARY = [
+    "Cerfa", "ANTS", "FranceConnect", "France Connect", "CAF", "URSSAF", "Ameli", "CPAM",
+    "service-public.gouv.fr", "impots.gouv.fr", "carte grise", "certificat d'immatriculation",
+    "certificat de cession", "permis de conduire", "carte d'identité", "passeport",
+    "APL", "RSA", "prime d'activité", "SIRET", "IBAN", "auto-entrepreneur", "Holo",
+]
+
+LIVE_SAMPLE_RATE = 16000
+
+
+def init_live_session(language: str = "fr") -> dict:
+    """Ouvre une session Gladia temps réel (WebSocket) et renvoie {id, url}.
+
+    Le navigateur se connecte directement à `url` et y pousse le micro en PCM
+    16 kHz mono : la transcription arrive mot à mot pendant que l'on parle, au
+    lieu d'attendre upload + job + polling (~3 s) comme en mode fichier.
+
+    `endpointing` = silence (en secondes) qui clôt une phrase. 0.05 par défaut chez
+    Gladia : trop court pour une consigne dite d'une traite, une respiration la couperait.
+    """
+    load_dotenv(Path(__file__).with_name(".env"))
+    endpointing = float(os.environ.get("GLADIA_ENDPOINTING", "0.6"))
+    body = {
+        "model": "solaria-1",
+        "encoding": "wav/pcm",
+        "sample_rate": LIVE_SAMPLE_RATE,
+        "bit_depth": 16,
+        "channels": 1,
+        "endpointing": endpointing,
+        "maximum_duration_without_endpointing": 15,
+        "language_config": {"languages": [language], "code_switching": False},
+        "messages_config": {"receive_partial_transcripts": True},
+        "realtime_processing": {
+            "custom_vocabulary": True,
+            "custom_vocabulary_config": {"vocabulary": VOCABULARY, "default_intensity": 0.5},
+        },
+    }
+    response = requests.post(
+        f"{API}/live",
+        headers={"x-gladia-key": _key(), "Content-Type": "application/json"},
+        json=body,
+        timeout=15,
+    )
+    if response.status_code >= 300:
+        raise GladiaError(f"live {response.status_code}: {response.text[:300]}")
+    data = response.json()
+    if "url" not in data:
+        raise GladiaError(f"live: réponse sans url ({str(data)[:200]})")
+    return {"id": data.get("id"), "url": data["url"], "sample_rate": LIVE_SAMPLE_RATE}
+
+
 def clean_command(text: str) -> str:
     """Nettoie la sortie STT : ponctuation parasite, hésitations, espaces."""
     for filler in ("euh", "heu", "bah", "ben"):

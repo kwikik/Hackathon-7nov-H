@@ -53,7 +53,7 @@ def make_voice() -> Path:
 def main() -> None:
     music = make_music()
     voice = make_voice()
-    final = ROOT.parent / "cerfa_agent.mp4"
+    final = ROOT / "cerfa_agent.mp4"
 
     run([
         "ffmpeg", "-y",

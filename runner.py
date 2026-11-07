@@ -174,6 +174,7 @@ def run(
                     confirmed["value"] = bool(payload.get("approved"))
                     state.awaiting = None
                     if not confirmed["value"]:
+                        planner.record(results)  # historique cohérent si une consigne suit
                         state.status = "aborted"
                         state.answer = "Action refusée par l'utilisateur."
                         state.finished_at = datetime.now(timezone.utc).isoformat()

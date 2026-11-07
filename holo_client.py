@@ -3,7 +3,7 @@
 Doc : https://hub.hcompany.ai/models-api/overview
 Modèles servis (nov. 2026) :
   holo4-27b        payant, le plus capable          (function calling)
-  holo4-35b-a3b    payant, le plus rapide           (function calling)
+  holo4-35b-a3b    payant, le plus rapide           (function calling)  <- défaut du projet
   holo3-1-35b-a3b  GRATUIT, 10 req/min              (function calling + structured outputs)
   holo3-122b-a10b  payant                           (structured outputs uniquement)
 """
@@ -19,6 +19,7 @@ DEFAULT_BASE_URL = "https://api.hcompany.ai/v1/"
 DEFAULT_MODEL = "holo4-35b-a3b"
 # Le free tier est limité à 10 requêtes/minute : 6.05 s entre deux appels.
 FREE_TIER_INTERVAL = 6.05
+DEFAULT_TEMPERATURE = 0.3
 
 
 class HoloError(RuntimeError):
@@ -50,6 +51,10 @@ class HoloClient:
             min_interval = float(raw) if raw else (FREE_TIER_INTERVAL if self.model.startswith("holo3-1") else 0.0)
         self.min_interval = min_interval
         self._last_call = 0.0
+        # Un agent qui clique doit être constant : température basse par défaut.
+        self.temperature = float(os.environ.get("HOLO_TEMPERATURE", DEFAULT_TEMPERATURE))
+        # Le raisonnement améliore les pas difficiles mais coûte de la latence à chaque pas.
+        self.thinking = os.environ.get("HOLO_THINKING", "1").strip().lower() not in ("0", "false", "no", "off")
 
     def _throttle(self) -> None:
         if self.min_interval <= 0:
@@ -64,7 +69,7 @@ class HoloClient:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
         *,
-        thinking: bool = True,
+        thinking: bool | None = None,
         temperature: float | None = None,
         tool_choice: str | None = None,
         max_attempts: int = 5,
@@ -73,8 +78,8 @@ class HoloClient:
         kwargs: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
-            "temperature": 0.8 if temperature is None else temperature,
-            "extra_body": {"chat_template_kwargs": {"enable_thinking": thinking}},
+            "temperature": self.temperature if temperature is None else temperature,
+            "extra_body": {"chat_template_kwargs": {"enable_thinking": self.thinking if thinking is None else thinking}},
         }
         if tools:
             kwargs["tools"] = tools
