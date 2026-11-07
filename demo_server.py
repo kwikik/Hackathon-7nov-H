@@ -313,7 +313,16 @@ def _stop_agent() -> bool:
 
 def main() -> None:
     RUNS.mkdir(exist_ok=True)
-    server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    # Sous Windows, SO_REUSEADDR laisse DEUX serveurs écouter le même port : les
+    # requêtes tombent au hasard sur l'un ou l'autre (vieux code, état différent).
+    # On préfère une erreur claire au démarrage.
+    if os.name == "nt":
+        ThreadingHTTPServer.allow_reuse_address = False
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    except OSError as exc:
+        print(f"Port {PORT} déjà utilisé : un autre serveur de démo tourne sans doute. ({exc})")
+        sys.exit(1)
     print(f"Cerfa demo -> http://localhost:{PORT}")
     try:
         server.serve_forever()

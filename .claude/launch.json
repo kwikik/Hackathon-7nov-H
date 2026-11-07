@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "cerfa-demo",
+      "runtimeExecutable": "py",
+      "runtimeArgs": ["-3.13", "demo_server.py"],
+      "port": 8765
+    }
+  ]
+}
