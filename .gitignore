@@ -1,0 +1,29 @@
+# secrets
+.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+video/.venv/
+
+# sorties de runs (captures, logs, état, profil navigateur)
+runs/
+result.png
+
+# médias : vidéos, images, audio
+*.mp4
+*.webm
+*.mov
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.wav
+*.mp3
+
+# artefacts de rendu vidéo
+video/frames/
+video/final_check/
+video/preview/
+video/video_silent.mp4

@@ -1,0 +1,788 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Cerfa Agent — video</title>
+<style>
+  :root{
+    --bg:#07070b;
+    --ink:#f5f5f9;
+    --accent:#7c5cff;
+    --accent-soft:rgba(124,92,255,.16);
+    --lime:#c6ff4f;
+    --muted:rgba(245,245,249,.42);
+    --line:rgba(245,245,249,.10);
+    --display:'Bahnschrift','Segoe UI',sans-serif;
+    --text:'Segoe UI',sans-serif;
+    --mono:Consolas,'Courier New',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1920px;height:1080px;overflow:hidden;background:var(--bg);color:var(--ink);
+    font-family:var(--text);-webkit-font-smoothing:antialiased}
+  #stage{position:relative;width:1920px;height:1080px;overflow:hidden}
+
+  /* ---------- fond ---------- */
+  #bg{position:absolute;inset:0;
+    background:
+      radial-gradient(1100px 700px at 18% 8%, rgba(124,92,255,.20), transparent 62%),
+      radial-gradient(900px 620px at 88% 96%, rgba(198,255,79,.06), transparent 60%),
+      radial-gradient(1200px 900px at 60% 45%, rgba(124,92,255,.06), transparent 70%),
+      var(--bg);}
+  #grid{position:absolute;inset:0;opacity:.5;
+    background-image:linear-gradient(to right, rgba(245,245,249,.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(245,245,249,.045) 1px, transparent 1px);
+    background-size:120px 120px;
+    mask-image:radial-gradient(1200px 800px at 50% 40%, #000 30%, transparent 78%);
+    -webkit-mask-image:radial-gradient(1200px 800px at 50% 40%, #000 30%, transparent 78%);}
+  #vignette{position:absolute;inset:0;background:radial-gradient(1500px 1000px at 50% 50%, transparent 45%, rgba(0,0,0,.55) 100%)}
+  #flash{position:absolute;inset:0;background:#fff;opacity:0}
+
+  /* ---------- chrome ---------- */
+  #hud{position:absolute;left:64px;top:52px;font-family:var(--mono);font-size:15px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--muted);opacity:0;display:flex;gap:16px;align-items:center}
+  #hud b{color:rgba(245,245,249,.8);font-weight:600}
+  #hud .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 12px var(--accent)}
+  #hudRight{position:absolute;right:64px;top:52px;font-family:var(--mono);font-size:15px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--muted);opacity:0}
+  #progressWrap{position:absolute;left:0;bottom:0;width:1920px;height:3px;background:rgba(245,245,249,.07)}
+  #progress{height:3px;width:0;background:linear-gradient(90deg,var(--accent),var(--lime));box-shadow:0 0 14px rgba(124,92,255,.8)}
+
+  /* ---------- sous-titres ---------- */
+  #caps{position:absolute;left:0;right:0;bottom:64px;display:flex;justify-content:center;opacity:0}
+  #capsInner{max-width:1560px;text-align:center;font-family:var(--display);font-weight:600;
+    font-size:44px;line-height:1.2;letter-spacing:-.005em;
+    padding:16px 34px;border-radius:18px;
+    background:linear-gradient(180deg,rgba(8,8,12,.0),rgba(8,8,12,.72) 45%,rgba(8,8,12,.0));
+    text-shadow:0 2px 24px rgba(0,0,0,.85)}
+  .cw{color:rgba(245,245,249,.62);transition:none;display:inline-block}
+  .cw.on{color:#fff}
+  .cw.hot{color:var(--lime);transform:scale(1.04)}
+
+  /* ---------- scenes ---------- */
+  .scene{position:absolute;inset:0;opacity:0;visibility:hidden}
+
+  /* --- A. hook --- */
+  #hookWord{position:absolute;left:0;right:0;top:326px;text-align:center;font-family:var(--display);
+    font-weight:700;font-size:230px;letter-spacing:-.045em;line-height:1}
+  #hookSub{position:absolute;left:0;right:0;top:640px;text-align:center;font-family:var(--mono);
+    font-size:26px;letter-spacing:.06em;color:var(--muted);opacity:0}
+  #hookKicker{position:absolute;left:0;right:0;top:250px;text-align:center;font-family:var(--mono);
+    font-size:20px;letter-spacing:.3em;color:var(--accent);opacity:0;text-transform:uppercase}
+  #hookBar{position:absolute;left:50%;top:610px;width:0;height:4px;background:var(--accent);
+    transform:translateX(-50%);box-shadow:0 0 24px rgba(124,92,255,.9)}
+
+  /* --- B. problem --- */
+  #pWrap{position:absolute;left:170px;top:250px;width:1600px}
+  #pKicker{font-family:var(--mono);font-size:20px;letter-spacing:.28em;color:var(--accent);
+    text-transform:uppercase;margin-bottom:44px;opacity:0}
+  .pLine{display:flex;align-items:baseline;gap:34px;margin-bottom:34px;opacity:0;
+    font-family:var(--display);font-weight:600;font-size:86px;letter-spacing:-.035em;line-height:1.04;white-space:nowrap}
+  .pLine .num{font-family:var(--mono);font-size:24px;color:var(--muted);letter-spacing:.1em;min-width:52px}
+  .pLine .txt{position:relative}
+  .pLine .u{position:absolute;left:0;bottom:-10px;height:5px;width:0;background:var(--accent);opacity:.85}
+  .pLine.last .txt{color:var(--lime)}
+
+  /* --- C. reveal --- */
+  #rWord{position:absolute;left:0;right:0;top:340px;text-align:center;font-family:var(--display);
+    font-weight:700;font-size:196px;letter-spacing:-.05em;line-height:1}
+  #rWord span.a{color:var(--accent)}
+  #rRule{position:absolute;left:50%;top:566px;width:0;height:6px;background:var(--accent);
+    transform:translateX(-50%);box-shadow:0 0 30px rgba(124,92,255,.9)}
+  #rTag{position:absolute;left:0;right:0;top:596px;text-align:center;font-family:var(--display);
+    font-weight:600;font-size:64px;letter-spacing:-.02em;opacity:0}
+  #rKicker{position:absolute;left:0;right:0;top:270px;text-align:center;font-family:var(--mono);font-size:20px;
+    letter-spacing:.3em;text-transform:uppercase;color:var(--muted);opacity:0}
+  #rChips{position:absolute;left:0;right:0;top:712px;display:flex;justify-content:center;gap:18px}
+  .chip{font-family:var(--mono);font-size:19px;letter-spacing:.12em;text-transform:uppercase;
+    padding:12px 22px;border:1px solid var(--line);border-radius:999px;color:rgba(245,245,249,.72);
+    background:rgba(245,245,249,.03);opacity:0}
+
+  /* --- D. how --- */
+  #hTitle{position:absolute;left:0;right:0;top:132px;text-align:center;font-family:var(--display);
+    font-weight:600;font-size:58px;letter-spacing:-.02em;opacity:0}
+  #hTitle span{color:var(--accent)}
+  #hChain{position:absolute;left:159px;top:322px;width:1602px;height:290px}
+  .node{position:absolute;top:0;width:250px;height:262px;border-radius:20px;opacity:0;
+    background:linear-gradient(180deg,rgba(245,245,249,.055),rgba(245,245,249,.018));
+    border:1px solid rgba(245,245,249,.09);padding:24px 20px}
+  .node .ic{width:42px;height:42px;margin-bottom:18px;color:var(--accent)}
+  .node .ic svg{width:42px;height:42px;stroke:currentColor;fill:none;stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round}
+  .node .nm{font-family:var(--display);font-weight:600;font-size:25px;letter-spacing:-.01em}
+  .node .ds{font-family:var(--mono);font-size:13.5px;line-height:1.45;color:var(--muted);margin-top:10px;
+    letter-spacing:.02em}
+  .node.hot{border-color:rgba(124,92,255,.55);background:linear-gradient(180deg,rgba(124,92,255,.18),rgba(124,92,255,.04))}
+  .link{position:absolute;top:133px;height:2px;background:linear-gradient(90deg,rgba(124,92,255,.7),rgba(124,92,255,.25));
+    transform-origin:left center;transform:scaleX(0)}
+  .link::after{content:'';position:absolute;right:-1px;top:-4px;width:10px;height:10px;border-right:2px solid rgba(124,92,255,.9);
+    border-top:2px solid rgba(124,92,255,.9);transform:rotate(45deg)}
+  #hResult{position:absolute;left:159px;right:159px;top:656px;height:100px;border-radius:18px;opacity:0;
+    border:1px solid rgba(198,255,79,.35);background:linear-gradient(90deg,rgba(198,255,79,.14),rgba(198,255,79,.03));
+    display:flex;align-items:center;justify-content:center;gap:22px;
+    font-family:var(--display);font-weight:600;font-size:40px;letter-spacing:-.01em}
+  #hResult .ok{width:44px;height:44px;border-radius:50%;background:var(--lime);color:#0a0a0f;
+    display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700}
+  #packet{position:absolute;top:130px;width:16px;height:16px;border-radius:50%;background:var(--lime);
+    box-shadow:0 0 24px var(--lime);opacity:0}
+
+  /* --- E. demo --- */
+  #win{position:absolute;left:88px;top:168px;width:1170px;height:742px;border-radius:18px;overflow:hidden;
+    background:#0e0e14;border:1px solid rgba(245,245,249,.12);opacity:0;
+    box-shadow:0 40px 120px rgba(0,0,0,.6)}
+  #winBar{height:48px;background:#15151d;border-bottom:1px solid rgba(245,245,249,.08);
+    display:flex;align-items:center;gap:9px;padding:0 18px;position:relative}
+  #winBar i{width:11px;height:11px;border-radius:50%;background:rgba(245,245,249,.18);display:block}
+  #url{position:absolute;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:14px;
+    color:rgba(245,245,249,.5);background:rgba(245,245,249,.06);padding:6px 18px;border-radius:999px}
+  #page{position:relative;padding:38px 56px;height:694px;background:#0b0b11}
+  #page h1{font-family:var(--display);font-weight:600;font-size:34px;letter-spacing:-.01em}
+  #page .sub{font-family:var(--mono);font-size:14px;color:var(--muted);margin-top:8px;letter-spacing:.04em}
+  #fields{margin-top:26px;display:grid;grid-template-columns:1fr 1fr;gap:18px 26px}
+  .fld{position:relative}
+  .fld label{display:block;font-family:var(--mono);font-size:12px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+  .inp{height:54px;border-radius:10px;border:1px solid rgba(245,245,249,.14);background:rgba(245,245,249,.035);
+    padding:0 16px;display:flex;align-items:center;font-size:21px;letter-spacing:.01em;position:relative}
+  .inp .caret{width:2px;height:24px;background:var(--accent);margin-left:1px;opacity:0}
+  .inp .tick{position:absolute;right:14px;color:var(--lime);font-size:18px;opacity:0}
+  #recapBtn{position:absolute;right:56px;top:590px;height:56px;padding:0 30px;border-radius:10px;
+    background:var(--accent);color:#fff;font-family:var(--display);font-weight:600;font-size:20px;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 0 rgba(124,92,255,.5)}
+  #consent{position:absolute;left:56px;top:604px;font-family:var(--mono);font-size:14px;color:var(--muted)}
+  .sect{margin-top:26px;padding-top:22px;border-top:1px solid rgba(245,245,249,.07)}
+  .lbl2{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:12px}
+  .pills{display:flex;gap:10px}
+  .pill{font-family:var(--text);font-size:16px;padding:9px 18px;border-radius:999px;
+    border:1px solid rgba(245,245,249,.14);color:rgba(245,245,249,.62)}
+  .pill.on{border-color:rgba(124,92,255,.8);background:rgba(124,92,255,.16);color:#fff}
+  #cursor{position:absolute;width:30px;height:30px;left:0;top:0;opacity:0;z-index:40}
+  #cursor svg{width:30px;height:30px;filter:drop-shadow(0 3px 6px rgba(0,0,0,.6))}
+  .ripple{position:absolute;width:56px;height:56px;margin:-28px 0 0 -28px;border-radius:50%;
+    border:2px solid rgba(124,92,255,.9);opacity:0;z-index:35}
+  #mockTag{position:absolute;left:20px;bottom:12px;font-family:var(--mono);font-size:11px;
+    letter-spacing:.18em;text-transform:uppercase;color:rgba(245,245,249,.22)}
+
+  /* panneau droit */
+  #panel{position:absolute;left:1306px;top:168px;width:522px;height:742px}
+  .pane{position:relative;border-radius:16px;border:1px solid rgba(245,245,249,.09);
+    background:linear-gradient(180deg,rgba(245,245,249,.045),rgba(245,245,249,.012));padding:20px 22px}
+  .pane .lbl{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
+  .pane .lbl .live{color:var(--lime);opacity:.9}
+  #voicePane{opacity:0;height:150px;margin-bottom:18px}
+  #wave{display:flex;align-items:flex-end;gap:4px;height:46px;margin-bottom:12px}
+  #wave i{display:block;width:6px;border-radius:3px;background:var(--accent);height:8px}
+  #quote{font-family:var(--display);font-weight:600;font-size:23px;letter-spacing:-.01em;line-height:1.25}
+  #logPane{opacity:0;height:574px}
+  .log{font-family:var(--mono);font-size:15.5px;line-height:1.62;color:rgba(245,245,249,.62);
+    display:flex;gap:10px;opacity:0;margin-bottom:2px}
+  .log .tag{color:var(--accent);min-width:96px;font-size:13px;letter-spacing:.06em;padding-top:2px}
+  .log .tag.gl{color:var(--lime)}
+  .log .tag.warn{color:#ffcf5c}
+  #stateChip{position:absolute;left:22px;bottom:20px;right:22px;height:46px;border-radius:10px;
+    border:1px solid rgba(255,207,92,.4);background:rgba(255,207,92,.10);display:flex;align-items:center;
+    justify-content:center;gap:10px;font-family:var(--mono);font-size:13px;letter-spacing:.14em;
+    text-transform:uppercase;color:#ffcf5c;opacity:0}
+
+  /* --- F. trust --- */
+  #tKicker{position:absolute;left:0;right:0;top:236px;text-align:center;font-family:var(--mono);font-size:20px;
+    letter-spacing:.3em;text-transform:uppercase;color:var(--accent);opacity:0}
+  #tTitle{position:absolute;left:0;right:0;top:296px;text-align:center;font-family:var(--display);
+    font-weight:600;font-size:96px;letter-spacing:-.035em;opacity:0}
+  #tCards{position:absolute;left:150px;top:520px;width:1620px;display:flex;gap:30px}
+  .tcard{flex:1;height:300px;border-radius:20px;border:1px solid rgba(245,245,249,.1);padding:30px 28px;
+    background:linear-gradient(180deg,rgba(245,245,249,.055),rgba(245,245,249,.015));opacity:0}
+  .tcard .ic{width:44px;height:44px;color:var(--lime);margin-bottom:22px}
+  .tcard .ic svg{width:44px;height:44px;stroke:currentColor;fill:none;stroke-width:1.7;
+    stroke-linecap:round;stroke-linejoin:round}
+  .tcard h3{font-family:var(--display);font-weight:600;font-size:32px;letter-spacing:-.015em;line-height:1.16}
+  .tcard p{font-family:var(--mono);font-size:15px;line-height:1.55;color:var(--muted);margin-top:14px}
+
+  /* --- G. end --- */
+  #eWord{position:absolute;left:0;right:0;top:352px;text-align:center;font-family:var(--display);
+    font-weight:700;font-size:150px;letter-spacing:-.05em;line-height:1;opacity:0}
+  #eWord span{color:var(--accent)}
+  #eTag{position:absolute;left:0;right:0;top:540px;text-align:center;font-family:var(--display);
+    font-weight:500;font-size:44px;letter-spacing:-.015em;color:rgba(245,245,249,.86);opacity:0}
+  #eRule{position:absolute;left:50%;top:640px;height:1px;width:0;background:rgba(245,245,249,.18);transform:translateX(-50%)}
+  #eMeta{position:absolute;left:0;right:0;top:690px;text-align:center;font-family:var(--mono);font-size:19px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--muted);opacity:0;line-height:2.1}
+  #eCTA{position:absolute;left:0;right:0;top:806px;text-align:center;font-family:var(--mono);font-size:18px;
+    letter-spacing:.2em;text-transform:uppercase;color:var(--lime);opacity:0}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div><div id="grid"></div><div id="vignette"></div>
+
+  <div id="hud"><span class="dot"></span><b>Cerfa Agent</b><span>·</span><span>H Company × 42AI</span></div>
+  <div id="hudRight">Computer Use Agents · 2026</div>
+
+  <!-- A -->
+  <section class="scene" id="scHook">
+    <div id="hookKicker">Le problème</div>
+    <div id="hookWord"></div>
+    <div id="hookBar"></div>
+    <div id="hookSub">aucune envie de s'y coller.</div>
+  </section>
+
+  <!-- B -->
+  <section class="scene" id="scProblem">
+    <div id="pWrap">
+      <div id="pKicker">Ce que ça coûte vraiment</div>
+      <div id="pLines"></div>
+    </div>
+  </section>
+
+  <!-- C -->
+  <section class="scene" id="scReveal">
+    <div id="rKicker">La solution</div>
+    <div id="rWord">Cerfa <span class="a">Agent</span></div>
+    <div id="rRule"></div>
+    <div id="rTag">Tu parles. Il clique.</div>
+    <div id="rChips">
+      <div class="chip">Gladia · voix</div><div class="chip">Holo · vision</div><div class="chip">Playwright · action</div>
+    </div>
+  </section>
+
+  <!-- D -->
+  <section class="scene" id="scHow">
+    <div id="hTitle">Une consigne en français. <span>Un formulaire rempli.</span></div>
+    <div id="hChain">
+      <div class="node" id="n0"><div class="ic"><svg viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4M8 22h8"/></svg></div><div class="nm">Ta voix</div><div class="ds">« remplis ma demande<br>d'aide au logement »</div></div>
+      <div class="node" id="n1"><div class="ic"><svg viewBox="0 0 24 24"><path d="M2 12h2l2-7 3 16 3-12 2 6 2-3h6"/></svg></div><div class="nm">Gladia</div><div class="ds">speech → texte<br>en temps réel</div></div>
+      <div class="node" id="n2"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M4.2 7.5l2.6 1.5M17.2 15l2.6 1.5M4.2 16.5l2.6-1.5M17.2 9l2.6-1.5"/><circle cx="12" cy="12" r="4"/></svg></div><div class="nm">LLM</div><div class="ds">choisit la bonne<br>donnée du profil</div></div>
+      <div class="node" id="n3"><div class="ic"><svg viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></div><div class="nm">Holo</div><div class="ds">regarde l'écran,<br>localise le champ</div></div>
+      <div class="node" id="n4"><div class="ic"><svg viewBox="0 0 24 24"><path d="M5 3l14 9-6 1.5L10 21 5 3Z"/></svg></div><div class="nm">Playwright</div><div class="ds">clique, tape,<br>vérifie</div></div>
+      <div class="link" id="l0"></div><div class="link" id="l1"></div><div class="link" id="l2"></div><div class="link" id="l3"></div>
+      <div id="packet"></div>
+    </div>
+    <div id="hResult"><span class="ok">✓</span><span>Formulaire rempli</span></div>
+  </section>
+
+  <!-- E -->
+  <section class="scene" id="scDemo">
+    <div id="win">
+      <div id="winBar"><i></i><i></i><i></i><div id="url">mes-aides.gouv.fr / demande-logement</div></div>
+      <div id="page">
+        <h1>Demande d'aide au logement</h1>
+        <div class="sub">Formulaire officiel · 4 champs · ~12 min à la main</div>
+        <div id="fields">
+          <div class="fld" id="fNom"><label>Nom</label><div class="inp"><span class="val"></span><span class="caret"></span><span class="tick">✓</span></div></div>
+          <div class="fld" id="fPrenom"><label>Prénom</label><div class="inp"><span class="val"></span><span class="caret"></span><span class="tick">✓</span></div></div>
+          <div class="fld" id="fAdresse"><label>Adresse</label><div class="inp"><span class="val"></span><span class="caret"></span><span class="tick">✓</span></div></div>
+          <div class="fld" id="fEmail"><label>Email</label><div class="inp"><span class="val"></span><span class="caret"></span><span class="tick">✓</span></div></div>
+        </div>
+        <div class="sect">
+          <div class="lbl2">Situation</div>
+          <div class="pills"><span class="pill on">Salarié</span><span class="pill">Étudiant</span><span class="pill">Sans activité</span><span class="pill">Autre</span></div>
+        </div>
+        <div id="consent">☑ Je certifie l'exactitude des informations</div>
+        <div id="recapBtn">Envoyer ma demande</div>
+        <div id="mockTag">maquette produit — démo live au pitch</div>
+      </div>
+      <div id="cursor"><svg viewBox="0 0 24 24"><path d="M4 2l16 10-7 1.6L9.6 22 4 2Z" fill="#fff" stroke="#0b0b11" stroke-width="1.2"/></svg></div>
+      <div class="ripple" id="rip0"></div><div class="ripple" id="rip1"></div>
+      <div class="ripple" id="rip2"></div><div class="ripple" id="rip3"></div>
+    </div>
+    <div id="panel">
+      <div class="pane" id="voicePane">
+        <div class="lbl"><span>Entrée voix</span><span class="live">● live</span></div>
+        <div id="wave"></div>
+        <div id="quote">« Remplis ma demande d'aide au logement. »</div>
+      </div>
+      <div class="pane" id="logPane">
+        <div class="lbl"><span>Journal d'actions</span><span>agent</span></div>
+        <div id="logs"></div>
+        <div id="stateChip"><span>◐</span><span>en attente de ta validation</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- F -->
+  <section class="scene" id="scTrust">
+    <div id="tKicker">Garde-fous</div>
+    <div id="tTitle">Le contrôle reste humain.</div>
+    <div id="tCards">
+      <div class="tcard"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6l8-3Z"/><path d="M9 12l2 2 4-4"/></svg></div><h3>Aucun envoi<br>sans validation</h3><p>Récapitulatif obligatoire.<br>Le clic final reste le tien.</p></div>
+      <div class="tcard"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 5h16M4 12h16M4 19h10"/></svg></div><h3>Chaque action<br>journalisée</h3><p>Champ visé, coordonnées,<br>valeur saisie : tout est tracé.</p></div>
+      <div class="tcard"><div class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg></div><h3>Humain dans<br>la boucle</h3><p>CAPTCHA, 2FA, doute :<br>l'agent te passe la main.</p></div>
+    </div>
+  </section>
+
+  <!-- G -->
+  <section class="scene" id="scEnd">
+    <div id="eWord">Cerfa <span>Agent</span></div>
+    <div id="eTag">L'administratif français, enfin sans friction.</div>
+    <div id="eRule"></div>
+    <div id="eMeta">H Company × 42AI — Computer Use Agents Hackathon<br>Paris · 7–8 novembre 2026</div>
+    <div id="eCTA">Démo live · code dans la description</div>
+  </section>
+
+  <div id="caps"><div id="capsInner"></div></div>
+  <div id="progressWrap"><div id="progress"></div></div>
+  <div id="flash"></div>
+</div>
+
+<script>
+const TL = window.__TL__;
+
+/* ---------- utils ---------- */
+const clamp=(x,a,b)=>Math.min(b,Math.max(a,x));
+const lerp=(a,b,u)=>a+(b-a)*u;
+const eOut=u=>1-Math.pow(1-u,3);
+const eIn=u=>u*u*u;
+const eInOut=u=>u<.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2;
+function kf(t,keys,ease=eOut){
+  if(t<=keys[0][0])return keys[0][1];
+  for(let i=1;i<keys.length;i++){
+    if(t<=keys[i][0]){
+      const u=(t-keys[i-1][0])/(keys[i][0]-keys[i-1][0]);
+      return lerp(keys[i-1][1],keys[i][1],(ease||eOut)(u));
+    }
+  }
+  return keys[keys.length-1][1];
+}
+const $=id=>document.getElementById(id);
+const norm=s=>s.toLowerCase().replace(/[’']/g," ").replace(/[^a-zàâäéèêëîïôöùûüçñ0-9]+/g," ").trim();
+
+/* trouve le t0 des mots correspondant a une phrase dans une scene */
+function findLine(words,sentence,from=0){
+  const toks=norm(sentence).split(' ').filter(Boolean);
+  for(let i=from;i<words.length;i++){
+    let j=i,ok=true;
+    for(const tk of toks){
+      if(j>=words.length){ok=false;break;}
+      const w=norm(words[j].w);
+      if(w!==tk && !(w.startsWith(tk)||tk.startsWith(w))){
+        // tolere les coupures (ex: "l'" / "agent")
+        if(!(tk.length<=2&&w.startsWith(tk.slice(0,1)))){ok=false;break;}
+      }
+      j++;
+    }
+    if(ok&&j>i)return {t:words[i].t0,t1:words[j-1].t1,end:j};
+  }
+  return null;
+}
+
+/* ---------- scenes ---------- */
+const S={}; TL.scenes.forEach((s,i)=>{S[s.id]={...s,idx:i};});
+const FADE=0.16;
+
+/* ---- A. hook ---- */
+const HOOK_ITEMS=[
+  {t:0.50,dur:0.89,w:'CAF',color:'#f5f5f9',pre:'La '},
+  {t:1.39,dur:1.18,w:'Impôts',color:'#f5f5f9',pre:'Les '},
+  {t:2.57,dur:1.30,w:'Cerfas',color:'#7c5cff',pre:'Les '},
+];
+function renderHook(lt,dur){
+  let item=null;
+  for(const it of HOOK_ITEMS){ if(lt>=it.t-0.02 && lt<it.t+it.dur) item=it; }
+  const wEl=$('hookWord');
+  if(item){
+    const u=(lt-item.t)/0.34;
+    const sc=lerp(1.16,1,eOut(clamp(u,0,1)));
+    const op=clamp(u*3.2,0,1);
+    wEl.innerHTML=(item.pre?`<span style="color:rgba(245,245,249,.32);font-size:.42em;letter-spacing:-.02em">${item.pre}</span>`:'')
+      +`<span style="color:${item.color}">${item.w}</span>`;
+    wEl.style.transform=`scale(${sc})`;
+    wEl.style.opacity=op;
+    wEl.style.filter=lt-item.t<0.12?`blur(${(0.12-(lt-item.t))*40}px)`:'none';
+  } else {
+    wEl.style.opacity=0;
+  }
+  $('hookKicker').style.opacity=kf(lt,[[0,0],[0.25,1],[2.4,1],[2.7,0]]);
+  const b=$('hookBar');
+  const bw=kf(lt,[[0.55,0],[1.35,300],[2.5,300],[3.3,420]]);
+  b.style.width=bw+'px';
+  b.style.opacity=kf(lt,[[0.55,0],[0.8,1],[3.2,1],[3.6,0]]);
+  $('hookSub').style.opacity=kf(lt,[[3.30,0],[3.55,1],[4.3,1],[4.49,0]]);
+  $('hookWord').style.opacity*= 1;
+  // flash sur chaque slam
+  let fl=0;
+  for(const it of HOOK_ITEMS){const d=lt-it.t; if(d>=0&&d<0.10) fl=Math.max(fl,0.55*(1-d/0.10));}
+  flash(fl);
+}
+
+/* ---- B. problem ---- */
+const P_LINES=[
+  'Des heures perdues.',
+  'Des champs incompréhensibles.',
+  'Des erreurs, des relances.',
+  'Et beaucoup de gens qui abandonnent en route.',
+];
+(function buildProblem(){
+  const wrap=$('pLines');
+  P_LINES.forEach((txt,i)=>{
+    const d=document.createElement('div');
+    d.className='pLine'+(i===P_LINES.length-1?' last':'');
+    d.innerHTML=`<span class="num">0${i+1}</span><span class="txt">${txt}<span class="u"></span></span>`;
+    wrap.appendChild(d);
+  });
+  fitLines();
+})();
+function fitLines(){
+  const wrap=$('pLines');
+  const W=wrap.clientWidth;
+  document.querySelectorAll('.pLine').forEach(el=>{
+    const txt=el.querySelector('.txt');
+    el.style.fontSize='86px';
+    const w=txt.getBoundingClientRect().width;
+    if(w>W) el.style.fontSize=Math.floor(86*(W/w))+'px';
+  });
+}
+function renderProblem(lt,dur){
+  const words=TL.words, sc=S.problem;
+  const lines=[...document.querySelectorAll('.pLine')];
+  let from=0, base=sc.audio_start, step=(sc.audio_dur)/P_LINES.length;
+  const found=P_LINES.map(txt=>{
+    const r=findLine(words,txt,0);
+    return r?r.t:base+step*P_LINES.indexOf(txt);
+  });
+  // tri + fallback croissant
+  let prev=base-0.2;
+  found.forEach((v,i)=>{ if(v<=prev||v>sc.audio_start+sc.audio_dur+0.4){found[i]=prev+step;} prev=found[i]; });
+  lines.forEach((el,i)=>{
+    const t=found[i]-sc.start;
+    const u=clamp((lt-t)/0.42,0,1);
+    el.style.opacity=u;
+    el.style.transform=`translateX(${lerp(-46,0,eOut(u))}px)`;
+    const ul=el.querySelector('.u');
+    ul.style.width=clamp((lt-t-0.10)/0.55,0,1)*el.querySelector('.txt').offsetWidth+'px';
+  });
+  $('pKicker').style.opacity=kf(lt,[[0.15,0],[0.5,1],[dur-0.4,1],[dur,0.6]]);
+}
+
+/* ---- C. reveal ---- */
+function renderReveal(lt,dur){
+  const w=$('rWord');
+  const u=clamp((lt-0.20)/0.55,0,1);
+  w.style.opacity=clamp(u*2.4,0,1);
+  w.style.transform=`scale(${lerp(1.10,1,eOut(u))})`;
+  w.style.letterSpacing=lerp(-0.02,-0.05,eOut(u))+'em';
+  $('rKicker').style.opacity=kf(lt,[[0.15,0],[0.55,1],[dur-0.5,1],[dur,0]]);
+  $('rRule').style.width=kf(lt,[[0.45,0],[1.15,520]])+'px';
+  $('rRule').style.opacity=kf(lt,[[0.45,0],[0.7,1],[dur,1]]);
+  const tu=clamp((lt-2.0)/0.5,0,1);
+  $('rTag').style.opacity=tu;
+  $('rTag').style.transform=`translateY(${lerp(24,0,eOut(tu))}px)`;
+  document.querySelectorAll('#rChips .chip').forEach((c,i)=>{
+    const t=3.1+i*0.18;
+    const uu=clamp((lt-t)/0.40,0,1);
+    c.style.opacity=uu;
+    c.style.transform=`translateY(${lerp(18,0,eOut(uu))}px)`;
+  });
+  flash(lt<0.22?0.5*(1-lt/0.22):0);
+}
+
+/* ---- D. how ---- */
+const CW=250, GAP=88;
+let HOW_T=null;
+function howTimes(){
+  if(HOW_T) return HOW_T;
+  const w=TL.words, sc=S.how;
+  const q=['Tu dictes ta demande.','Gladia la transcrit.','Le modèle choisit la bonne donnée.',
+           "Holo regarde l'écran",'Playwright clique','le formulaire se remplit'];
+  HOW_T=q.map((s,i)=>{
+    const r=findLine(w,s);
+    const t=r?r.t:sc.audio_start+i*(sc.audio_dur/6);
+    return clamp(t-sc.start,0.45,sc.dur-1.5);
+  });
+  return HOW_T;
+}
+function renderHow(lt,dur){
+  const NT=howTimes();
+  const ttl=clamp((lt-0.05)/0.45,0,1);
+  $('hTitle').style.opacity=ttl;
+  $('hTitle').style.transform=`translateY(${lerp(-18,0,eOut(ttl))}px)`;
+  for(let i=0;i<5;i++){
+    const n=$('n'+i), t=NT[i];
+    const u=clamp((lt-t)/0.45,0,1);
+    n.style.left=(i*(CW+GAP))+'px';
+    n.style.opacity=u;
+    n.style.transform=`translateY(${lerp(34,0,eOut(u))}px) scale(${lerp(.96,1,eOut(u))})`;
+    const nextT=i<4?NT[i+1]:NT[4]+2.2;
+    n.classList.toggle('hot',lt>=t&&lt<nextT+0.15);
+  }
+  for(let i=0;i<4;i++){
+    const t=NT[i]+0.34;
+    const u=clamp((lt-t)/0.34,0,1);
+    const l=$('l'+i);
+    l.style.left=(i*(CW+GAP)+CW+10)+'px';
+    l.style.width=(GAP-24)+'px';
+    l.style.transform=`scaleX(${eOut(u)})`;
+  }
+  // paquet qui circule le long de la chaine
+  const p=$('packet');
+  let pos=null;
+  for(let i=0;i<4;i++){
+    const a=NT[i]+0.55, b=NT[i+1]+0.12;
+    if(lt>=a&&lt<b) pos={x:lerp(i*(CW+GAP)+CW, (i+1)*(CW+GAP), (lt-a)/(b-a))};
+  }
+  if(pos){ p.style.opacity=1; p.style.left=(pos.x-8)+'px'; } else p.style.opacity=0;
+  const rt=NT[5]-0.30;
+  const ru=clamp((lt-rt)/0.55,0,1);
+  $('hResult').style.opacity=ru;
+  $('hResult').style.transform=`translateY(${lerp(26,0,eOut(ru))}px)`;
+  $('hResult').style.filter=(lt>rt&&lt<rt+0.3)?`blur(${(0.3-(lt-rt))*22}px)`:'none';
+  flash((lt>rt&&lt<rt+0.18)?0.28*(1-(lt-rt)/0.18):0);
+}
+
+/* ---- E. demo ---- */
+const COLS=[];
+(function(){
+  const c=$('wave');
+  for(let i=0;i<20;i++){const b=document.createElement('i');c.appendChild(b);COLS.push(b);}
+})();
+const LOGS=[
+  {t:1.25,tag:'GLADIA',cls:'gl',html:'« remplis ma demande d\'aide au logement »'},
+  {t:2.30,tag:'HOLO',cls:'',html:'champ <b style="color:#fff">Nom</b> → (486, 612)'},
+  {t:3.60,tag:'PLAYWRIGHT',cls:'',html:'click · type <b style="color:#c6ff4f">DEHILI</b>'},
+  {t:4.60,tag:'HOLO',cls:'',html:'champ <b style="color:#fff">Prénom</b> → (712, 612)'},
+  {t:5.60,tag:'HOLO',cls:'',html:'champ <b style="color:#fff">Adresse</b> → (486, 700)'},
+  {t:7.00,tag:'HOLO',cls:'',html:'champ <b style="color:#fff">Email</b> → (712, 700)'},
+  {t:7.80,tag:'LLM',cls:'',html:'4 champs · 0 erreur · profil complet'},
+  {t:8.35,tag:'GARDE-FOU',cls:'warn',html:'soumission bloquée → validation humaine'},
+];
+const FIELDS=[
+  {id:'fNom',    key:'nom',    val:'DEHILI',                         click:2.45, type:[2.65,3.55], tick:7.30},
+  {id:'fPrenom', key:'prenom', val:'Dylan',                          click:3.65, type:[3.85,4.50], tick:7.40},
+  {id:'fAdresse',key:'adresse',val:'12 rue de Rivoli, 75004 Paris',   click:4.65, type:[4.85,5.95], tick:7.50},
+  {id:'fEmail',  key:'email',  val:'dylan.dehili@gmail.com',          click:6.10, type:[6.30,7.20], tick:7.60},
+];
+/* position absolue (dans #stage) d'un element, insensible aux transforms */
+function absPos(el){
+  let x=0,y=0,p=el;
+  while(p){ x+=p.offsetLeft; y+=p.offsetTop; p=p.offsetParent; }
+  return {x,y};
+}
+let POS=null, WOFF=null;
+function winOffset(){
+  if(WOFF) return WOFF;
+  WOFF=absPos($('win'));
+  return WOFF;
+}
+function positions(){
+  if(POS) return POS;
+  const rect=el=>{const b=el.getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2};};
+  const btn=$('recapBtn');
+  POS={nom:rect($('fNom').querySelector('.inp')),prenom:rect($('fPrenom').querySelector('.inp')),
+       adresse:rect($('fAdresse').querySelector('.inp')),email:rect($('fEmail').querySelector('.inp')),
+       btn:rect(btn)};
+  return POS;
+}
+function curPos(t){
+  const P=positions();
+  const wps=[
+    {t:0.35, x:930,y:846},
+    {t:2.45, x:P.nom.x,y:P.nom.y},
+    {t:3.65, x:P.prenom.x,y:P.prenom.y},
+    {t:4.65, x:P.adresse.x,y:P.adresse.y},
+    {t:6.10, x:P.email.x,y:P.email.y},
+    {t:8.10, x:P.btn.x+40,y:P.btn.y+30},
+    {t:9.30, x:P.btn.x,y:P.btn.y},
+  ];
+  let i=0;
+  for(let k=1;k<wps.length;k++){ if(t>=wps[k].t) i=k; }
+  const a=wps[i], b=wps[Math.min(i+1,wps.length-1)];
+  const u=clamp((t-a.t)/((b.t-a.t)||1),0,1);
+  return {x:lerp(a.x,b.x,eInOut(u)), y:lerp(a.y,b.y,eInOut(u))};
+}
+function renderDemo(lt,dur){
+  const win=$('win');
+  const u=clamp((lt-0.05)/0.55,0,1);
+  win.style.opacity=u;
+  win.style.transform=`translateY(${lerp(40,0,eOut(u))}px) scale(${lerp(.975,1,eOut(u))})`;
+  const vp=clamp((lt-0.75)/0.4,0,1);
+  $('voicePane').style.opacity=vp;
+  $('voicePane').style.transform=`translateY(${lerp(14,0,eOut(vp))}px)`;
+  // waveform
+  COLS.forEach((b,i)=>{
+    const env=clamp((lt-0.9)/0.3,0,1)*clamp((3.4-lt)/0.6,0,1);
+    const h=8+34*Math.abs(Math.sin(lt*7.5+i*0.55))*env;
+    b.style.height=Math.max(6,h).toFixed(1)+'px';
+    b.style.opacity=(0.35+0.65*env).toFixed(2);
+  });
+  const lp=clamp((lt-1.05)/0.4,0,1);
+  $('logPane').style.opacity=lp;
+  $('logPane').style.transform=`translateY(${lerp(14,0,eOut(lp))}px)`;
+  // logs
+  const box=$('logs');
+  if(box.children.length!==LOGS.length){
+    box.innerHTML='';
+    LOGS.forEach(l=>{
+      const d=document.createElement('div');
+      d.className='log';
+      d.innerHTML=`<span class="tag ${l.cls}">${l.tag}</span><span>${l.html}</span>`;
+      box.appendChild(d);
+    });
+  }
+  [...box.children].forEach((d,i)=>{
+    const t=LOGS[i].t;
+    const uu=clamp((lt-t)/0.26,0,1);
+    d.style.opacity=uu;
+    d.style.transform=`translateX(${lerp(-12,0,eOut(uu))}px)`;
+  });
+  // champs
+  FIELDS.forEach((f,fi)=>{
+    const el=$(f.id), inp=el.querySelector('.inp'), val=el.querySelector('.val'),
+          car=el.querySelector('.caret'), tick=el.querySelector('.tick');
+    const focused=lt>=f.click-0.06 && lt<f.type[1]+0.25;
+    inp.style.borderColor=focused?'rgba(124,92,255,.85)':'rgba(245,245,249,.14)';
+    inp.style.background=focused?'rgba(124,92,255,.10)':'rgba(245,245,249,.035)';
+    const p=clamp((lt-f.type[0])/(f.type[1]-f.type[0]),0,1);
+    val.textContent=f.val.slice(0,Math.round(p*f.val.length));
+    car.style.opacity=(focused&&lt<f.type[1]+0.18&&Math.floor(lt*3)%2===0)?1:0;
+    const tu=clamp((lt-f.tick)/0.3,0,1);
+    tick.style.opacity=tu;
+  });
+  // ripples (coordonnees locales a #win)
+  const WO=winOffset();
+  const clicks=FIELDS.map(f=>f.click).concat([9.30]);
+  clicks.forEach((ct,i)=>{
+    const r=$('rip'+(i%4));
+    const d=lt-ct;
+    if(d>=0&&d<0.55){
+      const uu=d/0.55;
+      r.style.opacity=(1-uu)*0.9;
+      r.style.transform=`scale(${lerp(.5,1.7,eOut(uu))})`;
+      const pos=curPos(ct+0.001);
+      r.style.left=(pos.x-WO.x)+'px'; r.style.top=(pos.y-WO.y)+'px';
+    } else r.style.opacity=0;
+  });
+  // curseur
+  const cu=$('cursor');
+  cu.style.opacity=clamp((lt-0.9)/0.4,0,1);
+  const pos=curPos(lt);
+  cu.style.transform=`translate(${pos.x-WO.x-6}px,${pos.y-WO.y-4}px)`;
+  // carte recap + bouton
+  const rp=clamp((lt-7.95)/0.5,0,1);
+  const btn=$('recapBtn');
+  btn.style.transform=`scale(${lerp(.9,1,eOut(rp))}) translateY(${lerp(14,0,eOut(rp))}px)`;
+  btn.style.opacity=0.25+0.75*rp;
+  const pulse=lt>9.25?(0.5+0.5*Math.sin((lt-9.25)*7)):0;
+  btn.style.boxShadow=`0 0 ${20+pulse*40}px rgba(124,92,255,${0.35+pulse*0.45}), 0 0 0 ${pulse*8}px rgba(124,92,255,.10)`;
+  $('consent').style.opacity=0.4+0.6*rp;
+  const ch=clamp((lt-8.55)/0.35,0,1);
+  $('stateChip').style.opacity=ch;
+  $('stateChip').style.borderColor=`rgba(255,207,92,${0.35+0.35*(0.5+0.5*Math.sin(lt*5))})`;
+  // overlay final
+  const ov=clamp((lt-10.30)/0.5,0,1);
+  $('win').style.filter=`brightness(${lerp(1,0.5,ov)})`;
+  // texte final sur la scene
+  let fin=$('demoFinal');
+  if(!fin){
+    fin=document.createElement('div'); fin.id='demoFinal';
+    fin.style.cssText='position:absolute;left:88px;top:430px;width:1170px;text-align:center;font-family:var(--display);font-weight:700;font-size:84px;letter-spacing:-.04em;opacity:0;text-shadow:0 10px 60px rgba(0,0,0,.9)';
+    fin.innerHTML='Rien ne part<br>sans <span style="color:#c6ff4f">ton feu vert.</span>';
+    $('scDemo').appendChild(fin);
+  }
+  fin.style.opacity=ov;
+  fin.style.transform=`translateY(${lerp(26,0,eOut(ov))}px)`;
+}
+
+/* ---- F. trust ---- */
+function renderTrust(lt,dur){
+  const k=clamp((lt-0.10)/0.40,0,1);
+  $('tKicker').style.opacity=k;
+  const t=clamp((lt-0.35)/0.55,0,1);
+  $('tTitle').style.opacity=t;
+  $('tTitle').style.transform=`translateY(${lerp(26,0,eOut(t))}px)`;
+  document.querySelectorAll('.tcard').forEach((c,i)=>{
+    const u=clamp((lt-0.95-i*0.22)/0.5,0,1);
+    c.style.opacity=u;
+    c.style.transform=`translateY(${lerp(46,0,eOut(u))}px)`;
+  });
+}
+
+/* ---- G. end ---- */
+function renderEnd(lt,dur){
+  const u=clamp((lt-0.15)/0.6,0,1);
+  $('eWord').style.opacity=u;
+  $('eWord').style.transform=`scale(${lerp(1.06,1,eOut(u))})`;
+  const t=clamp((lt-1.25)/0.5,0,1);
+  $('eTag').style.opacity=t;
+  $('eTag').style.transform=`translateY(${lerp(20,0,eOut(t))}px)`;
+  $('eRule').style.width=kf(lt,[[1.35,0],[2.0,700]])+'px';
+  const m=clamp((lt-2.05)/0.5,0,1);
+  $('eMeta').style.opacity=m*0.95;
+  $('eCTA').style.opacity=clamp((lt-2.85)/0.5,0,1);
+  flash(lt<0.2?0.45*(1-lt/0.2):0);
+}
+
+/* ---------- sous-titres ---------- */
+let CAP_CHUNKS=[];
+(function buildCaps(){
+  const skip=new Set(['hook','problem','reveal','end']);
+  TL.scenes.forEach(sc=>{
+    if(skip.has(sc.id)) return;
+    const w=TL.words.filter(x=>x.t0>=sc.start-0.01 && x.t0<sc.start+sc.dur);
+    if(!w.length) return;
+    let cur=[];
+    const flush=()=>{ if(cur.length) CAP_CHUNKS.push(cur); cur=[]; };
+    w.forEach(wd=>{
+      if(cur.length){
+        const prev=cur[cur.length-1];
+        if(wd.t0-prev.t1>0.235 || cur.length>=5) flush();
+      }
+      cur.push(wd);
+    });
+    flush();
+  });
+  window.__caps=CAP_CHUNKS;
+})();
+function renderCaps(t){
+  const inner=$('capsInner'), wrap=$('caps');
+  let chunk=null;
+  for(const c of CAP_CHUNKS){
+    if(t>=c[0].t0-0.10 && t<=c[c.length-1].t1+0.28){chunk=c;break;}
+  }
+  if(!chunk){wrap.style.opacity=0;return;}
+  const key=chunk.map(w=>w.w).join('|');
+  if(inner.dataset.key!==key){
+    inner.dataset.key=key;
+    inner.innerHTML=chunk.map((w,i)=>`<span class="cw" data-i="${i}">${w.w}</span>`).join(' ');
+  }
+  const a=chunk[0].t0-0.10, b=chunk[chunk.length-1].t1+0.28;
+  wrap.style.opacity=Math.min(clamp((t-a)/0.12,0,1),clamp((b-t)/0.16,0,1));
+  const spans=inner.children;
+  chunk.forEach((w,i)=>{
+    const el=spans[i]; if(!el) return;
+    const on=t>=w.t0-0.02&&t<=w.t1+0.10;
+    const hot=t>=w.t0-0.02&&t<=w.t1+0.02;
+    el.className='cw'+(on?' on':'')+(hot&&t<=w.t1?' hot':'');
+  });
+}
+
+/* ---------- flash / chrome ---------- */
+function flash(v){ $('flash').style.opacity=clamp(v,0,1); }
+
+function renderFrame(t){
+  const total=TL.total;
+  // scene active
+  let active=null;
+  for(const s of TL.scenes){ if(t>=s.start && t<s.start+s.dur){ active=s; break; } }
+  if(!active) active=TL.scenes[TL.scenes.length-1];
+  TL.scenes.forEach(s=>{
+    const el=$('sc'+s.id.charAt(0).toUpperCase()+s.id.slice(1));
+    if(el){ el.style.visibility=(s===active)?'visible':'hidden'; el.style.opacity=1; }
+  });
+  const lt=t-active.start;
+  const R={hook:renderHook,problem:renderProblem,reveal:renderReveal,how:renderHow,demo:renderDemo,trust:renderTrust,end:renderEnd};
+  if(!active.__dirty){ }
+  flash(0);
+  (R[active.id]||(()=>{}))(lt,active.dur);
+  renderCaps(t);
+
+  // HUD
+  $('hud').style.opacity=kf(t,[[0.35,0],[0.9,1],[total-1.2,1],[total-0.5,0]]);
+  $('hudRight').style.opacity=kf(t,[[0.6,0],[1.1,1],[total-1.2,1],[total-0.5,0]]);
+  $('progress').style.width=(clamp(t/total,0,1)*1920)+'px';
+  $('progressWrap').style.opacity=kf(t,[[0.2,0],[0.6,1]]);
+}
+window.renderFrame=renderFrame;
+document.fonts.ready.then(()=>{ positions(); window.__ready=true; });
+</script>
+</body>
+</html>

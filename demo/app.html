@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cerfa — l'administratif par la voix</title>
+<style>
+  :root {
+    --bg: #07080b; --panel: #0e1016; --panel-2: #13161f; --line: #222736;
+    --text: #e8eaf2; --muted: #8b93a8; --accent: #7c5cff; --accent-2: #b9a6ff;
+    --ok: #34e2a0; --warn: #ffb020; --danger: #ff5470;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background:
+      radial-gradient(1200px 600px at 12% -10%, #241a4d 0%, transparent 55%),
+      radial-gradient(900px 500px at 100% 0%, #0f2b3d 0%, transparent 50%), var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: grid; grid-template-rows: 64px auto 1fr; overflow: hidden;
+  }
+  header { display: flex; align-items: center; gap: 18px; padding: 0 26px; border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; letter-spacing: -.02em; font-size: 18px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; background: linear-gradient(135deg, var(--accent), #35e0c4); box-shadow: 0 0 18px #7c5cff88; }
+  .brand small { color: var(--muted); font-weight: 450; font-size: 12px; }
+  .spacer { flex: 1; }
+  .pill { font: 500 12px/1 var(--mono); padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: #0b0d13; display: inline-flex; align-items: center; gap: 8px; }
+  .pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); display: block; }
+  .pill[data-s="running"] i { background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: blink 1s infinite; }
+  .pill[data-s="done"] i { background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+  .pill[data-s="awaiting_confirmation"] i, .pill[data-s="awaiting_input"] i { background: var(--warn); box-shadow: 0 0 10px var(--warn); animation: blink .7s infinite; }
+  .pill[data-s="error"] i, .pill[data-s="aborted"] i { background: var(--danger); }
+  @keyframes blink { 50% { opacity: .25 } }
+
+  main { display: grid; grid-template-columns: 420px 1fr; min-height: 0; }
+  .col { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+  .col.left { border-right: 1px solid var(--line); padding: 20px; gap: 14px; overflow-y: auto; }
+  .col.right { padding: 18px 22px 22px; gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .label { font: 600 10.5px/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+
+  /* --- écoute --- */
+  .micwrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #mic {
+    width: 104px; height: 104px; border-radius: 50%; border: 1px solid #2b3145; cursor: pointer;
+    background: radial-gradient(circle at 30% 25%, #242a3d, #10131c 70%); color: var(--text);
+    font-size: 32px; display: grid; place-items: center; transition: all .18s ease;
+    box-shadow: inset 0 1px 0 #ffffff10;
+  }
+  #mic:hover { border-color: #3a4260; transform: translateY(-1px); }
+  #mic.rec { background: radial-gradient(circle at 30% 25%, #5b2a3a, #1a0d13 70%); border-color: var(--danger); animation: pulse 1.4s infinite; }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 24px #ff547000; } 100% { box-shadow: 0 0 0 0 #ff547000; } }
+  #bars { display: flex; align-items: flex-end; gap: 3px; height: 26px; }
+  #mic-vu { font: 11px var(--mono); color: var(--muted); letter-spacing: .08em; }
+  .hint { color: var(--muted); font-size: 12px; text-align: center; min-height: 16px; }
+
+  #transcript { min-height: 70px; max-height: 148px; overflow-y: auto; font-size: 15px; line-height: 1.5; background: #0a0c12; border: 1px dashed #232a3a; border-radius: 10px; padding: 12px 14px; }
+  #transcript.empty { color: #5b6379; font-style: italic; }
+
+  input[type="text"], textarea, select {
+    width: 100%; background: #0a0c12; border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 10px 12px; font: 13px/1.45 var(--mono); outline: none;
+  }
+  textarea { resize: none; }
+  select { cursor: pointer; }
+  input:focus, textarea:focus, select:focus { border-color: #3b3f63; }
+
+  button.primary { width: 100%; padding: 12px 16px; border-radius: 11px; border: 1px solid #8c74ff66; background: linear-gradient(180deg, #8a6bff, #6a4bf0); color: white; font-weight: 600; font-size: 14px; cursor: pointer; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.primary:disabled { opacity: .45; cursor: not-allowed; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .check { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; font-family: var(--mono); cursor: pointer; }
+
+  .screen { flex: 1; min-height: 0; background: #05060a; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; position: relative; }
+  .screen img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .screen .placeholder { position: absolute; inset: 0; display: grid; place-items: center; color: #3d4357; font: 12px var(--mono); }
+  .screen .placeholder[hidden] { display: none; }
+
+  .log { height: 220px; overflow-y: auto; font: 12px/1.65 var(--mono); background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+  .log .line { display: grid; grid-template-columns: 30px 150px 1fr; gap: 10px; padding: 2px 0; border-bottom: 1px solid #12151d; }
+  .log .n { color: #4b5268; }
+  .log .t { color: var(--accent-2); }
+  .log .t.ko { color: var(--danger); }
+  .log .d { color: #a9b0c4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log .thought { color: #6f7891; font-style: italic; grid-template-columns: 30px 1fr; }
+  .log::-webkit-scrollbar { width: 8px; }
+  .log::-webkit-scrollbar-thumb { background: #232838; border-radius: 8px; }
+
+  #voicebar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: none;
+    align-items: center; gap: 20px; padding: 16px 26px;
+    background: linear-gradient(180deg, #17122b, #0d0f18);
+    border-top: 1px solid #7c5cff66; box-shadow: 0 -20px 60px #0009;
+  }
+  #voicebar.on { display: flex; }
+  .vb-left { flex: 1; min-width: 0; }
+  .vb-badge { display: inline-block; font: 600 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: #c3b4ff; border: 1px solid #7c5cff55; background: #7c5cff14; padding: 5px 9px; border-radius: 6px; margin-bottom: 8px; }
+  .vb-text { font-size: 16px; line-height: 1.4; color: #eef0f8; overflow: hidden; text-overflow: ellipsis; }
+  .vb-sub { font: 11.5px var(--mono); color: var(--muted); margin-top: 6px; }
+  .vb-right { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+  .vb-right button { padding: 11px 20px; border-radius: 10px; font-weight: 600; cursor: pointer; border: 1px solid var(--line); background: #0c0f17; color: var(--text); }
+  .vb-right button.go { background: linear-gradient(180deg,#1fbf85,#12a06c); border-color: #24d29566; color: #04120c; }
+  #vb-bars { display: flex; align-items: flex-end; gap: 3px; height: 30px; margin-right: 8px; }
+  #banner { display: none; margin: 10px 22px 0; padding: 9px 13px; border-radius: 10px; font: 12px var(--mono); background: #ff547012; border: 1px solid #ff547044; color: #ffb8c4; }
+  kbd { background: #161a25; border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; font: 11px var(--mono); color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><span class="dot"></span>Cerfa <small>— l'administratif français, par la voix</small></div>
+  <div class="spacer"></div>
+  <span class="pill" id="status" data-s="idle"><i></i><span>prêt</span></span>
+</header>
+
+<div id="banner"></div>
+
+<main>
+  <div class="col left">
+    <div class="card">
+      <div class="label">1 · tu parles</div>
+      <div class="micwrap">
+        <button id="mic" title="Espace pour démarrer/arrêter">●</button>
+        <div id="bars"></div>
+        <div id="mic-vu">micro coupé</div>
+        <div class="hint" id="michint">appuie sur le micro ou <kbd>espace</kbd></div>
+      </div>
+      <div id="transcript" class="empty" style="margin-top:12px">« Trouve la démarche pour déclarer la vente de mon véhicule… »</div>
+      <label class="check" style="margin-top:12px"><input type="checkbox" id="vad" checked> couper tout seul au silence (mains libres)</label>
+    </div>
+
+    <div class="card">
+      <div class="label">2 · la consigne</div>
+      <select id="scenario" style="margin-bottom:8px">
+        <option value="https://ants.gouv.fr/">ANTS — trouver une démarche</option>
+        <option value="https://immatriculation.ants.gouv.fr/demarches-en-ligne">ANTS — démarches immatriculation</option>
+        <option value="">Formulaire local de test</option>
+      </select>
+      <select id="model" style="margin-bottom:8px">
+        <option value="holo4-35b-a3b" selected>holo4 35B-A3B — rapide (recommandé démo)</option>
+        <option value="holo4-27b">holo4 27B — le plus capable</option>
+        <option value="holo3-1-35b-a3b">holo3.1 35B — gratuit</option>
+      </select>
+      <textarea id="task" rows="3" spellcheck="false" placeholder="Ta première consigne (facultatif — tu peux aussi la dire au micro)"></textarea>
+      <div style="height:8px"></div>
+      <input type="text" id="url" spellcheck="false" placeholder="URL cible (vide = formulaire local)">
+      <div class="row" style="margin-top:12px">
+        <button class="primary" id="run">Lancer l'agent</button>
+        <button id="stop" style="flex:0 0 90px;padding:12px;border-radius:11px;border:1px solid #ff547055;background:#ff547014;color:#ffb8c4;font-weight:600;cursor:pointer">Stop</button>
+      </div>
+      <div class="row" style="margin-top:10px; justify-content:space-between">
+        <label class="check"><input type="checkbox" id="autostart" checked> lancer dès la transcription</label>
+        <label class="check"><input type="checkbox" id="mock"> secours</label>
+      </div>
+      <label class="check" style="margin-top:8px"><input type="checkbox" id="noconfirm" checked> ne jamais demander de confirmation</label>
+      <label class="check" style="margin-top:8px"><input type="checkbox" id="converse" checked> mode conversation — il reste ouvert et suit mes consignes</label>
+    </div>
+
+    <div class="card" style="flex:1; min-height:0; display:flex; flex-direction:column">
+      <div class="label">profil utilisé</div>
+      <pre id="profile" style="margin:0; font:11.5px/1.6 var(--mono); color:#9aa2b8; overflow:auto"></pre>
+    </div>
+  </div>
+
+  <div class="col right">
+    <div class="screen">
+      <img id="shot" alt="capture de l'écran de l'agent" hidden>
+      <div class="placeholder" id="shotph">la capture de l'écran de l'agent apparaîtra ici</div>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+</main>
+
+<!-- barre vocale : l'agent attend une réponse, le micro s'ouvre tout seul -->
+<div id="voicebar">
+  <div class="vb-left">
+    <span class="vb-badge" id="vb-badge">il t'écoute</span>
+    <div class="vb-text" id="vb-text">—</div>
+    <div class="vb-sub" id="vb-sub">parle, je transcris ta réponse</div>
+  </div>
+  <div class="vb-right">
+    <div id="vb-bars"></div>
+    <button id="vb-yes" class="go">Confirmer</button>
+    <button id="vb-no">Annuler</button>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const state = { status: "idle", steps: [], thoughts: [], awaiting: null, answer: null };
+let lastRendered = 0, wasAwaiting = false, lastStatus = "idle", answerMode = null, discard = false;
+let conversationMode = false, micFailed = false;
+
+// ---------- état ----------
+async function poll() {
+  try {
+    const r = await fetch("/state", { cache: "no-store" });
+    Object.assign(state, await r.json());
+    render();
+  } catch (e) { /* serveur pas prêt */ }
+  setTimeout(poll, 550);
+}
+
+const LABELS = {
+  idle: "prêt", running: "l'agent travaille", done: "terminé", error: "erreur", aborted: "annulé",
+  interrupted: "interrompu (relance)",
+  listening: "il attend ta consigne",
+  awaiting_confirmation: "attente de ta validation", awaiting_input: "il te demande une info"
+};
+
+function render() {
+  const pill = $("#status");
+  pill.dataset.s = state.status;
+  pill.querySelector("span").textContent = LABELS[state.status] || state.status;
+
+  if (state.steps && state.steps.length !== lastRendered) {
+    lastRendered = state.steps.length;
+    $("#log").innerHTML = state.steps.map((s, i) => `
+      <div class="line">
+        <span class="n">${String(i + 1).padStart(2, "0")}</span>
+        <span class="t ${s.ok ? "" : "ko"}">${esc(s.tool)}</span>
+        <span class="d">${esc(s.detail || JSON.stringify(s.args))}</span>
+      </div>`).join("") +
+      (state.thoughts || []).slice(-2).map((t) => `
+      <div class="line thought"><span class="n">·</span><span class="d">${esc(t.slice(0, 220))}</span></div>`).join("");
+    $("#log").scrollTop = $("#log").scrollHeight;
+  }
+
+  if (state.screenshot) {
+    $("#shot").hidden = false;
+    $("#shotph").hidden = true;
+    $("#shot").src = "/live.png?t=" + Date.now();
+  }
+
+  const ask = state.status === "awaiting_input";
+  const needConfirm = state.status === "awaiting_confirmation";
+  $("#voicebar").classList.toggle("on", ask || needConfirm);
+  if (ask || needConfirm) {
+    $("#vb-badge").textContent = ask ? "il te demande une info" : "il veut envoyer";
+    $("#vb-text").textContent = state.awaiting || "—";
+    $("#vb-yes").style.display = needConfirm ? "block" : "none";
+    $("#vb-no").style.display = needConfirm ? "block" : "none";
+  }
+  if (state.status !== lastStatus) {
+    if (ask) enterAnswerMode("input");
+    else if (needConfirm) enterAnswerMode("confirm");
+    else leaveAnswerMode();
+    lastStatus = state.status;
+  }
+  $("#run").disabled = state.running || state.status === "running" || ask || needConfirm;
+
+  if (state.status === "done" || state.status === "listening") && state.answer && !wasAwaiting) {
+    $("#transcript").classList.remove("empty");
+    $("#transcript").textContent = "✓ " + state.answer;
+  }
+  wasAwaiting = ask || needConfirm;
+
+  // Mode conversation : quand l'agent attend, le micro se rouvre tout seul.
+  if (conversationMode && state.status === "listening" && !listening && !micFailed) {
+    $("#michint").textContent = "parle, il attend ta consigne";
+    startListening();
+  }
+}
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function banner(msg) { const b = $("#banner"); b.textContent = msg || ""; b.style.display = msg ? "block" : "none"; }
+
+// ---------- micro : écoute continue + VAD ----------
+let audioCtx = null, analyser = null, mediaStream = null, recorder = null;
+let chunks = [], listening = false, spoke = false, silenceTimer = null, rafId = null;
+
+function makeBars(container, count, maxHeight) {
+  const arr = [];
+  for (let i = 0; i < count; i++) {
+    const d = document.createElement("div");
+    d.style.cssText = "width:4px;height:4px;background:#2b3145;border-radius:2px;transition:height .08s";
+    container.appendChild(d);
+    arr.push({ el: d, max: maxHeight });
+  }
+  return arr;
+}
+const bars = makeBars($("#bars"), 14, 18);
+const vbBars = makeBars($("#vb-bars"), 12, 22);
+
+function setVu(level) {
+  for (const group of [bars, vbBars]) {
+    const n = Math.min(group.length, Math.round(4 + level * 90));
+    group.forEach((b, i) => {
+      const on = i < n;
+      b.el.style.height = (4 + (on ? b.max : 0)) + "px";
+      b.el.style.background = on ? "linear-gradient(180deg,#8a6bff,#35e0c4)" : "#2b3145";
+    });
+  }
+}
+
+async function startListening() {
+  if (listening) return;
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  } catch (e) { banner("micro refusé : " + e.message); micFailed = true; listening = false; $("#mic-vu").textContent = "micro coupé"; return; }
+
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = audioCtx.createMediaStreamSource(mediaStream);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 1024;
+  src.connect(analyser);
+
+  const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
+  recorder = new MediaRecorder(mediaStream, mime ? { mimeType: mime } : {});
+  chunks = [];
+  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  recorder.onstop = () => {
+    // Les pistes ne doivent être coupées qu'ICI : les arrêter avant `stop()`
+    // tronque le fichier webm et Gladia répond "Unsupported codec".
+    if (mediaStream) {
+      mediaStream.getTracks().forEach((t) => t.stop());
+      mediaStream = null;
+    }
+    onUtterance(mime || "audio/webm");
+  };
+  recorder.start(200);
+
+  listening = true; spoke = false;
+  $("#mic").classList.add("rec");
+  $("#mic-vu").textContent = "j'écoute…";
+  $("#michint").textContent = $("#vad").checked ? "parle, je coupe au silence" : "ré-appuie pour arrêter";
+  banner("");
+  loopVad();
+}
+
+function loopVad() {
+  if (!listening) return;
+  const buf = new Uint8Array(analyser.fftSize);
+  analyser.getByteTimeDomainData(buf);
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+  const rms = Math.sqrt(sum / buf.length);
+  setVu(rms);
+
+  if (rms > 0.015) {
+    spoke = true;
+    if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+  } else if (spoke && !silenceTimer && $("#vad").checked) {
+    silenceTimer = setTimeout(() => stopListening(true), 850);
+  }
+  rafId = requestAnimationFrame(loopVad);
+}
+
+function stopListening(auto) {
+  if (!listening) return;
+  listening = false;
+  if (rafId) cancelAnimationFrame(rafId);
+  if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+  $("#mic").classList.remove("rec");
+  $("#mic-vu").textContent = "transcription…";
+  setVu(0);
+  // On laisse `recorder.stop()` déclencher onstop, qui coupera les pistes.
+  try {
+    if (recorder && recorder.state !== "inactive") recorder.stop();
+    else if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
+  } catch (e) {
+    if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
+  }
+  if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
+  if (!auto) console.log("arrêt manuel");
+}
+
+async function onUtterance(mime) {
+  const blob = new Blob(chunks, { type: mime });
+  chunks = [];
+  if (discard) { discard = false; return; }
+  if (blob.size < 2000) {
+    $("#mic-vu").textContent = "micro coupé";
+    $("#michint").textContent = "rien entendu — réessaie";
+    return;
+  }
+  try {
+    const r = await fetch("/transcribe", { method: "POST", body: blob });
+    const d = await r.json();
+    if (!d.text) { banner("Gladia : " + (d.error || "transcription vide")); $("#mic-vu").textContent = "micro coupé"; return; }
+
+    // L'agent attend une réponse : on la lui envoie au lieu de lancer une tâche.
+    if (answerMode === "input") {
+      answerMode = null;
+      $("#vb-sub").textContent = "réponse envoyée : « " + d.text + " »";
+      reply({ text: d.text }, "/answer");
+      return;
+    }
+    if (answerMode === "confirm") {
+      const ok = isYes(d.text);
+      answerMode = null;
+      $("#vb-sub").textContent = ok ? "validé à la voix ✔" : "annulé à la voix ✘";
+      reply({ approved: ok }, "/confirm");
+      return;
+    }
+
+    // Mode conversation : la consigne part à l'agent déjà ouvert, sur la page courante.
+    if (conversationMode) {
+      $("#transcript").classList.remove("empty");
+      $("#transcript").textContent = "« " + d.text + " »";
+      $("#mic-vu").textContent = "micro coupé";
+      $("#michint").textContent = "consigne envoyée — l'agent travaille";
+      try {
+        const r2 = await fetch("/instruct", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ task: d.text }),
+        });
+        const d2 = await r2.json().catch(() => ({}));
+        if (!r2.ok) banner(d2.error || "consigne refusée");
+      } catch (e) { banner("consigne impossible : " + e.message); }
+      return;
+    }
+
+    $("#transcript").classList.remove("empty");
+    $("#transcript").textContent = "« " + d.text + " »";
+    $("#task").value = d.text;
+    $("#mic-vu").textContent = "micro coupé";
+    $("#michint").textContent = "appuie sur le micro ou espace";
+    if ($("#autostart").checked) startAgent();
+  } catch (e) {
+    banner("transcription impossible : " + e.message);
+    $("#mic-vu").textContent = "micro coupé";
+  }
+}
+
+$("#mic").addEventListener("click", () => { listening ? stopListening(false) : startListening(); });
+addEventListener("keydown", (e) => {
+  if (e.code === "Space" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) {
+    e.preventDefault();
+    listening ? stopListening(false) : startListening();
+  }
+});
+
+// ---------- lancement ----------
+async function startAgent() {
+  const body = {
+    task: $("#task").value.trim(),
+    url: $("#url").value.trim() || $("#scenario").value,
+    mock: $("#mock").checked,
+    no_confirm: $("#noconfirm").checked,
+    interactive: $("#converse").checked,
+    model: $("#model").value,
+    pause: 0.35
+  };
+  conversationMode = body.interactive;
+  micFailed = false;
+  $("#log").innerHTML = ""; lastRendered = 0;
+  try {
+    const r = await fetch("/start", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json();
+    if (!r.ok) banner(d.error || "lancement refusé"); else banner("");
+  } catch (e) { banner("lancement impossible : " + e.message); }
+}
+$("#run").addEventListener("click", startAgent);
+$("#stop").addEventListener("click", async () => {
+  try {
+    const r = await fetch("/stop", { method: "POST" });
+    const d = await r.json();
+    banner(d.stopped ? "run arrêté" : (d.reason || "aucun run en cours"));
+    setTimeout(() => banner(""), 2500);
+  } catch (e) { banner("stop impossible : " + e.message); }
+});
+
+// ---------- réponses ----------
+const isYes = (t) => /\b(oui|ouais|yes|ok|d'accord|valide|confirme|envoye|envoyer|vas[- ]y)\b/i.test(t)
+  && !/\b(non|pas|annule|arr[eê]te|stop)\b/i.test(t);
+
+async function reply(payload, endpoint) {
+  discard = true;
+  if (listening) stopListening(false);
+  $("#voicebar").classList.remove("on");
+  await fetch(endpoint || "/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+}
+
+function enterAnswerMode(kind) {
+  answerMode = kind;
+  discard = false;
+  $("#vb-sub").textContent = "le micro s'ouvre tout seul — parle";
+  $("#mic-vu").textContent = "j'écoute ta réponse…";
+  if (!listening) startListening();
+}
+
+function leaveAnswerMode() {
+  if (answerMode) {
+    answerMode = null;
+    discard = true;
+    if (listening) stopListening(false);
+  }
+}
+
+$("#vb-yes").addEventListener("click", () => { $("#vb-sub").textContent = "validé"; reply({ approved: true }, "/confirm"); });
+$("#vb-no").addEventListener("click", () => { $("#vb-sub").textContent = "annulé"; reply({ approved: false }, "/confirm"); });
+
+// ---------- divers ----------
+$("#scenario").addEventListener("change", (e) => { $("#url").value = e.target.value; });
+
+fetch("/profile").then((r) => r.json())
+  .then((p) => { $("#profile").textContent = Object.entries(p).map(([k, v]) => `${k.padEnd(15)} ${v}`).join("\n"); })
+  .catch(() => { $("#profile").textContent = "profile.json indisponible"; });
+
+poll();
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "nom": "Dehili",
+  "prenom": "Dylan",
+  "date_naissance": "14/03/1998",
+  "lieu_naissance": "Paris",
+  "nationalite": "francaise",
+  "adresse": "12 rue de Rivoli",
+  "code_postal": "75004",
+  "ville": "Paris",
+  "pays": "France",
+  "email": "dylandehili@gmail.com",
+  "telephone": "06 12 34 56 78",
+  "situation": "celibataire",
+  "profession": "ingenieur logiciel",
+  "societe": "Freelance",
+  "siret": "123 456 789 00012",
+  "iban": "FR76 3000 4000 0300 0000 0000 123",
+  "numero_secu": "1 98 03 75 123 456 78"
+}
