@@ -1,5 +1,9 @@
 # Cerfa Agent
 
+> ### 👉 Jury : essayer la démo
+> **Tout est dans [`jury.pdf`](jury.pdf)** : le lien de la démo en ligne, l'identifiant, le mot de
+> passe et un mode d'emploi en 4 étapes (parler à l'assistant, exemples de demandes).
+
 **Ton agent web, à la voix.**
 
 Tu dis ce que tu veux. L'agent ouvre un vrai navigateur, regarde l'écran et fait le travail :
