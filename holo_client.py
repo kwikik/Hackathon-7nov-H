@@ -53,8 +53,15 @@ class HoloClient:
         self._last_call = 0.0
         # Un agent qui clique doit être constant : température basse par défaut.
         self.temperature = float(os.environ.get("HOLO_TEMPERATURE", DEFAULT_TEMPERATURE))
-        # Le raisonnement améliore les pas difficiles mais coûte de la latence à chaque pas.
-        self.thinking = os.environ.get("HOLO_THINKING", "1").strip().lower() not in ("0", "false", "no", "off")
+        # Le raisonnement améliore les pas difficiles mais coûte plusieurs secondes par pas.
+        # auto (défaut) : le planner l'active seulement quand le pas le mérite ; 1 : toujours ; 0 : jamais.
+        raw = os.environ.get("HOLO_THINKING", "auto").strip().lower()
+        if raw in ("0", "false", "no", "off"):
+            self.thinking_mode = "off"
+        elif raw in ("1", "true", "yes", "on"):
+            self.thinking_mode = "on"
+        else:
+            self.thinking_mode = "auto"
 
     def _throttle(self) -> None:
         if self.min_interval <= 0:
@@ -79,7 +86,9 @@ class HoloClient:
             "model": self.model,
             "messages": messages,
             "temperature": self.temperature if temperature is None else temperature,
-            "extra_body": {"chat_template_kwargs": {"enable_thinking": self.thinking if thinking is None else thinking}},
+            "extra_body": {"chat_template_kwargs": {
+                "enable_thinking": self.thinking_mode != "off" if thinking is None else thinking,
+            }},
         }
         if tools:
             kwargs["tools"] = tools

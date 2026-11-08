@@ -70,6 +70,16 @@ NEW_INSTRUCTION = (
 )
 
 
+# Réflexion adaptative : naviguer n'en a pas besoin, remplir un formulaire ou comparer si.
+# Consignes qui demandent de raisonner sur ce qu'on a lu (le remplissage, lui, est détecté à l'écran).
+COMPLEX_TASK = re.compile(r"compar|r[ée]sum|analys|choisi|meilleur|moins cher|recommand|v[ée]rifie", re.IGNORECASE)
+# Seuls les vrais champs de saisie comptent : les cases à cocher servent souvent aux menus (Wikipédia...).
+_FILLABLE = {"", "text", "email", "tel", "number", "date", "datetime-local", "password", "url",
+             "textarea", "select-one", "select-multiple"}
+_SEARCH_HINT = re.compile(r"search|recherch|query|^q$|chercher", re.IGNORECASE)
+STRUGGLE_STEPS = 10  # au-delà, l'agent tourne en rond : il a besoin de réfléchir
+
+
 def strip_accents(text: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn")
 
@@ -100,7 +110,7 @@ def _digest_text(digest: dict[str, Any]) -> str:
 
 
 def _trim_images(messages: list[dict[str, Any]], keep: int = 3) -> None:
-    """Convention H Company : max 3 captures dans le contexte, sinon la précision s'écroule."""
+    """Garde les `keep` dernières captures (H Company : 3 max, sinon la précision s'écroule ; 2 = plus rapide)."""
     seen = 0
     for message in reversed(messages):
         if message.get("role") != "user" or not isinstance(message.get("content"), list):
@@ -116,13 +126,17 @@ def _trim_images(messages: list[dict[str, Any]], keep: int = 3) -> None:
 
 
 class HoloPlanner:
-    def __init__(self, client, task: str, profile: dict[str, Any], max_images: int = 3, auto_confirm: bool = False):
+    def __init__(self, client, task: str, profile: dict[str, Any], max_images: int = 2, auto_confirm: bool = False):
         self.client = client
         self.max_images = max_images
         self._first_task = task
         self._auto_confirm = auto_confirm
         self.messages: list[dict[str, Any]] = [{"role": "system", "content": self._system(profile)}]
         self.last_reasoning: str | None = None
+        self.last_thinking: tuple[bool, str] = (True, "")
+        self._task = task
+        self._task_steps = 0
+        self._last_failed = False
         self._pending: list[str] = []  # tool calls émis mais pas encore soldés par `record`
 
     def _system(self, profile: dict[str, Any]) -> str:
@@ -156,23 +170,52 @@ class HoloPlanner:
                 "content": json.dumps({"ok": False, "skipped": "run terminé avant cette action"}),
             })
         self._pending = []
+        self._task, self._task_steps, self._last_failed = task, 0, False
         self.messages.append({"role": "user", "content": NEW_INSTRUCTION.format(task=task)})
+
+    def _needs_thinking(self, digest: dict[str, Any]) -> tuple[bool, str]:
+        """Réfléchir coûte plusieurs secondes par pas : seulement quand le pas le mérite."""
+        mode = getattr(self.client, "thinking_mode", "on")
+        if mode != "auto":
+            return mode == "on", f"forcé ({mode})"
+        if self._last_failed:
+            return True, "l'action précédente a échoué"
+        if self._task_steps >= STRUGGLE_STEPS:
+            return True, f"{self._task_steps} pas sur cette consigne"
+        fillable = [
+            f for f in digest.get("fields", [])
+            if f.get("type") in _FILLABLE
+            and not _SEARCH_HINT.search(f"{f.get('name', '')} {f.get('label', '')}")
+        ]
+        # Formulaire à remplir : réfléchir tant qu'il reste des champs vides. Une fois rempli,
+        # valider et cliquer « Envoyer » n'a pas besoin de réflexion.
+        empty = [f for f in fillable if not str(f.get("value") or "").strip()]
+        if len(fillable) >= 2 and empty:
+            return True, f"formulaire à remplir ({len(empty)}/{len(fillable)} champs vides)"
+        if len(fillable) >= 2:
+            return False, "formulaire déjà rempli"
+        if COMPLEX_TASK.search(self._task or ""):
+            return True, "consigne qui demande de comparer ou de synthétiser"
+        return False, "navigation"
 
     def next_tool_calls(self, controller, ctx: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         png_b64, _, _ = controller.screenshot_b64()
         digest = controller.describe()
+        self.last_thinking = self._needs_thinking(digest)
+        self._task_steps += 1
+        print(f"   réflexion {'ON' if self.last_thinking[0] else 'OFF'} — {self.last_thinking[1]}")
         observation = {
             "role": "user",
             "content": [
                 {"type": "text", "text": "<observation>\n"},
-                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{png_b64}"}},
+                {"type": "image_url", "image_url": {"url": f"data:{controller.image_mime};base64,{png_b64}"}},
                 {"type": "text", "text": f"\n<page>{_digest_text(digest)}</page>\n</observation>"},
             ],
         }
         self.messages.append(observation)
         _trim_images(self.messages, self.max_images)
 
-        message = self.client.chat(self.messages, tools=TOOL_SPECS)
+        message = self.client.chat(self.messages, tools=TOOL_SPECS, thinking=self.last_thinking[0])
 
         self.last_reasoning = getattr(message, "reasoning", None)
 
@@ -198,10 +241,16 @@ class HoloPlanner:
         # On ne renvoie jamais le raisonnement dans l'historique (doc H Company).
         self.messages.append(assistant_msg)
         self._pending = [c["id"] for c in calls]
+        self._last_failed = not calls  # une réponse sans action compte comme un échec
         return calls
 
     def record(self, results: list[tuple[dict[str, Any], str]]) -> None:
         for call, content in results:
+            try:
+                if json.loads(content).get("ok") is False:
+                    self._last_failed = True
+            except (json.JSONDecodeError, AttributeError):
+                pass
             self.messages.append({"role": "tool", "tool_call_id": call["id"], "content": content})
             if call["id"] in self._pending:
                 self._pending.remove(call["id"])

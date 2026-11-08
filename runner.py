@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -12,7 +13,8 @@ from typing import Any, Callable
 from controller import TERMINAL_TOOLS, PageController
 from planner import HoloPlanner, MockPlanner, match_value, strip_accents
 
-RUNS_DIR = Path(__file__).with_name("runs")
+# CERFA_RUNS_DIR : isole un run de test (mesures) sans écraser l'état affiché par la démo.
+RUNS_DIR = Path(os.environ.get("CERFA_RUNS_DIR") or Path(__file__).with_name("runs"))
 
 Confirmer = Callable[[str, str], "bool | str"]
 

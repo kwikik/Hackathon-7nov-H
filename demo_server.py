@@ -152,7 +152,8 @@ class Handler(BaseHTTPRequestHandler):
                 return
             body = shot.read_bytes()
             self.send_response(200)
-            self.send_header("Content-Type", "image/png")
+            # Les captures sont en JPEG (plus légères) ; le nom /live.png est gardé pour l'interface.
+            self.send_header("Content-Type", "image/png" if body[1:4] == b"PNG" else "image/jpeg")
             self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
@@ -334,7 +335,7 @@ class Handler(BaseHTTPRequestHandler):
                 "--task",
                 task,
                 "--pause",
-                str(payload.get("pause", 0.35)),
+                str(payload.get("pause", 0)),
             ]
             if payload.get("mock"):
                 cmd.append("--mock")
@@ -356,7 +357,10 @@ class Handler(BaseHTTPRequestHandler):
                     return _json(self, {"error": "window invalide"}, 400)
 
             log = (RUNS / "agent.log").open("w", encoding="utf-8")
-            _process = subprocess.Popen(cmd, cwd=str(ROOT), stdout=log, stderr=subprocess.STDOUT)
+            _process = subprocess.Popen(
+                cmd, cwd=str(ROOT), stdout=log, stderr=subprocess.STDOUT,
+                env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+            )
             return _json(self, {"started": True, "pid": _process.pid, "task": task, "url": url})
 
     def _answer(self, path: str, body: bytes) -> None:

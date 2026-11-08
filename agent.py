@@ -121,6 +121,13 @@ def conversation(page, profile: dict, args, confirm, model_label: str) -> dict:
 
 
 def main() -> int:
+    # Lancé par le serveur, stdout part dans agent.log avec l'encodage Windows (cp1252) :
+    # un « ✓ » dans une réponse faisait planter la consigne. On force l'UTF-8.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     parser = argparse.ArgumentParser(description="Cerfa Agent")
     parser.add_argument("--url", default=DEFAULT_URL, help="page de départ")
     parser.add_argument("--task", default=DEFAULT_TASK, help="consigne en langage naturel")

@@ -219,12 +219,27 @@ class PageController:
     def screenshot_b64(self, fresh: bool = False) -> tuple[str, int, int]:
         if fresh or self._dirty:
             try:
-                self._last_png = self.page.screenshot(type="png")
+                self._last_png = self.page.screenshot(type="jpeg", quality=80)
                 self._dirty = False
             except Exception as exc:  # page fermée, crash de rendu : on réutilise la dernière image
                 print(f"   [capture] echec ({type(exc).__name__}), on garde la precedente")
         size = self.page.viewport_size or {"width": 1280, "height": 800}
         return base64.b64encode(self._last_png).decode(), size["width"], size["height"]
+
+    @property
+    def image_mime(self) -> str:
+        """Captures en JPEG ; le filet de sécurité (image vide) est un PNG."""
+        return "image/png" if self._last_png.startswith(b"\x89PNG") else "image/jpeg"
+
+    def _settle(self) -> None:
+        """Après un clic ou une touche : si une navigation démarre, attendre que le DOM soit là.
+
+        Pas d'attente fixe : sur une page qui ne bouge pas, ça rend la main tout de suite.
+        """
+        try:
+            self.page.wait_for_load_state("domcontentloaded", timeout=5000)
+        except Exception:  # noqa: BLE001 - page lente : le modèle verra l'état réel sur la capture
+            pass
 
     def describe(self) -> dict[str, Any]:
         try:
@@ -315,25 +330,23 @@ class PageController:
                     ensure_ascii=False,
                 )
             self.page.mouse.click(px, py)
-            self.page.wait_for_timeout(350)
+            self._settle()
             return json.dumps({"ok": True, "hit": hit, "url": self.page.url}, ensure_ascii=False)
 
         if name == "type":
-            self.page.keyboard.type(str(args.get("text", "")), delay=15)
-            self.page.wait_for_timeout(150)
+            self.page.keyboard.type(str(args.get("text", "")))
             return json.dumps({"ok": True, "typed": self.page.evaluate(
                 "() => { const e = document.activeElement; return e ? (e.value || e.innerText || '') : ''; }"
             )}, ensure_ascii=False)
 
         if name == "press_key":
             self.page.keyboard.press(str(args.get("key", "Enter")))
-            self.page.wait_for_timeout(300)
+            self._settle()
             return json.dumps({"ok": True, "url": self.page.url}, ensure_ascii=False)
 
         if name == "scroll":
             amount = int(args.get("amount", 600))
             self.page.mouse.wheel(0, amount if args.get("direction", "down") == "down" else -amount)
-            self.page.wait_for_timeout(300)
             return json.dumps({"ok": True, "url": self.page.url}, ensure_ascii=False)
 
         if name == "go_back":
@@ -341,7 +354,6 @@ class PageController:
                 self.page.go_back(wait_until="domcontentloaded", timeout=15000)
             except Exception as exc:  # noqa: BLE001
                 return json.dumps({"ok": False, "error": f"retour impossible: {exc}"}, ensure_ascii=False)
-            self.page.wait_for_timeout(600)
             return json.dumps({"ok": True, "url": self.page.url}, ensure_ascii=False)
 
         if name == "navigate":
@@ -352,7 +364,6 @@ class PageController:
                 self.page.goto(target, wait_until="domcontentloaded", timeout=30000)
             except Exception as exc:  # noqa: BLE001
                 return json.dumps({"ok": False, "error": f"navigation impossible: {exc}"}, ensure_ascii=False)
-            self.page.wait_for_timeout(800)
             return json.dumps({"ok": True, "url": self.page.url}, ensure_ascii=False)
 
         if name == "wait":
