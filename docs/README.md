@@ -6,9 +6,7 @@ Retour au [README principal](../README.md).
 |---|---|---|
 | [DEMO.md](DEMO.md) | Scénario en 3 actes, checklist T-30 min, risques, chiffres à réciter, temps de parole | Avant de monter sur scène |
 | [AVANCEMENT.md](AVANCEMENT.md) | Bugs corrigés, architecture, résultats de test, décisions techniques, test ANTS | Pour comprendre *pourquoi* le code est comme il est |
-| [ROADMAP.md](ROADMAP.md) | Planning 7–8 nov, risques, architecture en couches, plan vidéo | Pour le contexte hackathon |
 | [CORRECTIFS.md](CORRECTIFS.md) | Suivi des correctifs de l'audit (sécurité, Holo, Gladia, bugs) | Pour voir où on en est |
-| [IDEA.md](IDEA.md) | Idée de départ | Archive |
 
 ## Parcours conseillé
 

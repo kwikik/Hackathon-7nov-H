@@ -33,3 +33,6 @@ video/video_silent.mp4
 
 # presentation animee (perso)
 presentation/
+
+# réglages locaux de Claude Code
+.claude/

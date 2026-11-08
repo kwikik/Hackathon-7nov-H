@@ -255,7 +255,7 @@ demo/
   test_form.html    formulaire local, utilisé seulement par le mode hors-ligne (--mock)
 slides/index.html   deck de pitch (flèches ← →)
 video/              génération de la vidéo (script.md, timeline.json, render.py, mux.py)
-docs/               DEMO, AVANCEMENT, ROADMAP, IDEA — voir l'index docs/README.md
+docs/               DEMO, AVANCEMENT, CORRECTIFS — voir l'index docs/README.md
 runs/               sorties de runs (captures, logs, état) — ignoré par git
 ```
 
@@ -273,7 +273,6 @@ runs/               sorties de runs (captures, logs, état) — ignoré par git
 |---|---|
 | [docs/DEMO.md](docs/DEMO.md) | Feuille de répétition : scénario en 3 actes, checklist, ce qui peut casser |
 | [docs/AVANCEMENT.md](docs/AVANCEMENT.md) | Journal technique complet : bugs corrigés, résultats de test, décisions |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | Planning du hackathon, risques, architecture en couches |
 | [docs/CORRECTIFS.md](docs/CORRECTIFS.md) | Suivi des correctifs de l'audit : fait, reporté, à faire |
 | [docs/README.md](docs/README.md) | Index de toute la documentation |
 
