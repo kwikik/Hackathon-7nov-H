@@ -5,9 +5,9 @@ navigateur. Les coordonnées viennent de Holo (H Company), l'exécution de Playw
 
 Usage
 -----
-    python agent.py                                   # formulaire local de test
-    python agent.py --url https://... --task "..."    # vrai site
-    python agent.py --mock --headless                 # répétition hors-ligne, sans clé API
+    python agent.py --task "..."                      # part d'une page vide, va où on lui dit
+    python agent.py --url https://... --task "..."    # part d'un site précis
+    python agent.py --mock --headless                 # répétition hors-ligne (formulaire local), sans clé API
     python agent.py --demo                            # confirmation via le dashboard
 """
 from __future__ import annotations
@@ -20,11 +20,14 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from runner import build_planner, make_file_confirmer, run, set_status, terminal_confirmer
+from runner import build_planner, make_file_confirmer, mirror_page, run, set_status, terminal_confirmer
 
 ROOT = Path(__file__).parent
-DEFAULT_URL = (ROOT / "demo" / "test_form.html").as_uri()
-DEFAULT_TASK = (
+# L'agent part d'une page vide : c'est la consigne qui dit où aller.
+DEFAULT_URL = "about:blank"
+# Formulaire local : seulement pour le mode hors-ligne (--mock), qui ne sait rien faire d'autre.
+TEST_FORM_URL = (ROOT / "demo" / "test_form.html").as_uri()
+MOCK_TASK = (
     "Remplis ce formulaire de demande administrative avec mes informations "
     "personnelles, vérifie que chaque champ est correct, puis envoie-le."
 )
@@ -54,12 +57,13 @@ def conversation(page, profile: dict, args, confirm, model_label: str) -> dict:
 
     # Consigne de départ éventuelle (saisie dans l'interface avant le lancement)
     first = (args.task or "").strip()
-    if first and first != DEFAULT_TASK:
+    if first:
         instruction.write_text(json.dumps({"task": first}, ensure_ascii=False), encoding="utf-8")
 
     while True:
         set_status(page, "listening", model=model_label, keep=last)
         payload = None
+        next_mirror = 0.0
         while payload is None:
             if instruction.exists():
                 try:
@@ -69,7 +73,12 @@ def conversation(page, profile: dict, args, confirm, model_label: str) -> dict:
                     continue
                 instruction.unlink(missing_ok=True)
             else:
-                time.sleep(0.3)
+                # Tu peux naviguer toi-même dans la fenêtre : l'interface suit (~1 image/s).
+                if time.monotonic() >= next_mirror:
+                    last = mirror_page(page, last)
+                    set_status(page, "listening", model=model_label, keep=last)
+                    next_mirror = time.monotonic() + 1.0
+                page.wait_for_timeout(300)  # laisse Playwright traiter les événements de la page
 
         if payload.get("quit"):
             print("[conversation] arrêt demandé")
@@ -130,7 +139,7 @@ def main() -> int:
             pass
     parser = argparse.ArgumentParser(description="Cerfa Agent")
     parser.add_argument("--url", default=DEFAULT_URL, help="page de départ")
-    parser.add_argument("--task", default=DEFAULT_TASK, help="consigne en langage naturel")
+    parser.add_argument("--task", default="", help="consigne en langage naturel")
     parser.add_argument("--profile", default=str(ROOT / "profile.json"), help="profil utilisateur JSON")
     parser.add_argument("--mock", action="store_true", help="pilote la boucle sans appeler Holo")
     parser.add_argument("--headless", action="store_true", help="navigateur invisible")
@@ -165,6 +174,13 @@ def main() -> int:
         help="place la fenêtre du navigateur à l'écran (ex: 960,0,960,1040 = moitié droite d'un écran 1920)",
     )
     args = parser.parse_args()
+    if args.mock:
+        # Le mode hors-ligne ne sait remplir que le formulaire local.
+        if args.url == DEFAULT_URL:
+            args.url = TEST_FORM_URL
+        args.task = args.task or MOCK_TASK
+    if not args.task.strip() and not args.interactive:
+        parser.error("dis-lui ce qu'il doit faire : --task \"...\" (ou --interactive)")
 
     load_dotenv(ROOT / ".env")
     profile = load_profile(Path(args.profile))

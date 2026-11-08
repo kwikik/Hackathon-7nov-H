@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cerfa — votre assistant pour Internet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Atkinson Hyperlegible : police dessinée par le Braille Institute pour les personnes malvoyantes -->
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #14213d;        /* texte : 15:1 sur blanc */
+    --ink-2: #44506a;      /* texte secondaire : 8:1 sur blanc */
+    --paper: #ffffff;
+    --surface: #f3f5f9;
+    --line: #c9d1de;
+    --blue: #1f4fd8;       /* action : 6.4:1 sur blanc */
+    --blue-dark: #173ca6;
+    --green: #0b7a3e;      /* accord : 5.6:1 sur blanc */
+    --red: #b42318;        /* refus : 6.5:1 sur blanc */
+    --wait: #ffe58a;       /* fond « en attente », texte encre dessus */
+    --font: "Atkinson Hyperlegible", Verdana, "Segoe UI", sans-serif;
+    --radius: 14px;
+  }
+  html { font-size: 125%; }                 /* 20 px de base ; A− / A+ changent cette valeur */
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font); line-height: 1.5; }
+  :focus-visible { outline: 4px solid var(--blue); outline-offset: 3px; }
+  button { font-family: inherit; font-size: 1rem; cursor: pointer; }
+  a { color: var(--blue); }
+
+  /* ---------- en-tête ---------- */
+  header { display: flex; align-items: center; gap: 1rem; padding: .8rem 1.5rem; border-bottom: 2px solid var(--line); flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 1.4rem; }
+  header h1 span { font-weight: 400; color: var(--ink-2); }
+  .spacer { flex: 1; }
+  .textsize { display: flex; gap: .4rem; align-items: center; }
+  .textsize span { color: var(--ink-2); font-size: .9rem; }
+  .small-btn { min-width: 3rem; min-height: 2.6rem; padding: .3rem .8rem; border: 2px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 10px; font-weight: 700; }
+  .small-btn:hover { border-color: var(--blue); }
+  .expert { color: var(--ink-2); font-size: .85rem; }
+
+  /* ---------- mise en page ---------- */
+  main { display: grid; grid-template-columns: minmax(22rem, 30rem) 1fr; gap: 1.5rem; padding: 1.5rem; max-width: 110rem; margin: 0 auto; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  .col { display: flex; flex-direction: column; gap: 1.2rem; min-width: 0; }
+  h2 { font-size: 1.15rem; margin: 0 0 .5rem; }
+
+  /* ---------- le bouton Parler : l'élément fort de la page ---------- */
+  .talk { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .6rem; padding: 1.2rem 1rem; background: var(--surface); border-radius: var(--radius); }
+  #mic { width: 9rem; height: 9rem; border-radius: 50%; border: none; background: var(--blue); color: #fff; display: grid; place-items: center; box-shadow: 0 6px 0 var(--blue-dark); transition: transform .1s, background .2s; }
+  #mic:hover { background: var(--blue-dark); }
+  #mic:active { transform: translateY(3px); box-shadow: 0 3px 0 var(--blue-dark); }
+  #mic svg { width: 3.6rem; height: 3.6rem; }
+  #mic.rec { background: var(--red); box-shadow: 0 6px 0 #7f1810, 0 0 0 .6rem rgba(180,35,24,.18); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 6px 0 #7f1810, 0 0 0 1.1rem rgba(180,35,24,.08); } }
+  #mic-label { font-size: 1.25rem; font-weight: 700; }
+  #status { font-size: 1.05rem; color: var(--ink-2); min-height: 1.6em; }
+  #status.busy::before { content: ""; display: inline-block; width: .8em; height: .8em; margin-right: .5em; border: 3px solid var(--blue); border-right-color: transparent; border-radius: 50%; vertical-align: -.1em; animation: spin .9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- écrire ---------- */
+  .write label { display: block; font-weight: 700; margin-bottom: .4rem; }
+  .write .row { display: flex; gap: .6rem; }
+  #text { flex: 1; min-width: 0; font: inherit; font-size: 1.05rem; padding: .75rem .9rem; border: 2px solid var(--ink-2); border-radius: 10px; color: var(--ink); }
+  .btn { min-height: 3.2rem; padding: .6rem 1.3rem; border-radius: 12px; border: 2px solid transparent; font-weight: 700; font-size: 1.05rem; }
+  .btn.primary { background: var(--blue); color: #fff; }
+  .btn.primary:hover { background: var(--blue-dark); }
+  .btn.ok { background: var(--green); color: #fff; }
+  .btn.no { background: var(--paper); color: var(--red); border-color: var(--red); }
+  .btn.quiet { background: var(--paper); color: var(--ink); border-color: var(--line); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .hint { margin: .8rem 0 0; color: var(--ink-2); font-size: .95rem; }
+
+  /* ---------- réponse ---------- */
+  #result { border: 3px solid var(--green); border-radius: var(--radius); padding: 1rem 1.2rem; background: #f1faf4; }
+  #result[hidden] { display: none; }
+  #result h2 { color: var(--green); }
+  #result .asked { color: var(--ink-2); margin: 0 0 .4rem; }
+  #result .answer { font-size: 1.15rem; margin: 0; white-space: pre-line; }
+  #result .sources { margin: .8rem 0 0; padding-left: 1.2rem; font-size: .95rem; }
+
+  /* ---------- ce que fait l'assistant ---------- */
+  #steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+  #steps li { display: grid; grid-template-columns: 2rem 1fr; gap: .6rem; align-items: start; padding: .55rem .7rem; border-radius: 10px; background: var(--surface); }
+  #steps li:last-child { background: #e6edfc; }
+  #steps .ic { width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; background: var(--paper); border: 2px solid var(--line); font-weight: 700; }
+  #steps li.ko .ic { border-color: var(--red); color: var(--red); }
+  #steps li.done .ic { border-color: var(--green); color: var(--green); }
+  .empty { color: var(--ink-2); }
+  .actions { display: flex; gap: .6rem; flex-wrap: wrap; }
+
+  /* ---------- le site ---------- */
+  .site { display: flex; flex-direction: column; gap: .6rem; min-width: 0; }
+  #where { font-size: 1.05rem; margin: 0; }
+  #where b { word-break: break-all; }
+  .frame { border: 3px solid var(--ink); border-radius: var(--radius); overflow: hidden; background: var(--surface); aspect-ratio: 16 / 10; display: grid; place-items: center; }
+  .frame img { width: 100%; height: 100%; object-fit: contain; background: #fff; display: block; }
+  .frame img[hidden] { display: none; }
+  .frame .ph { padding: 2rem; text-align: center; color: var(--ink-2); max-width: 30rem; }
+  .frame .ph[hidden] { display: none; }
+  .frame .ph b { display: block; color: var(--ink); font-size: 1.3rem; margin-bottom: .4rem; }
+
+  /* ---------- fenêtre d'accord / de question ---------- */
+  #ask { position: fixed; inset: 0; background: rgba(20,33,61,.55); display: grid; place-items: center; padding: 1rem; z-index: 10; }
+  #ask[hidden] { display: none; }
+  .box { background: var(--paper); border-radius: 18px; padding: 1.6rem; width: min(46rem, 100%); max-height: 90vh; overflow: auto; border-top: 10px solid var(--wait); }
+  .box h2 { font-size: 1.5rem; }
+  .box .what { font-size: 1.2rem; margin: 0 0 1rem; }
+  .box table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; font-size: 1rem; }
+  .box td { padding: .5rem .4rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .box td.k { color: var(--ink-2); width: 40%; }
+  .box td.flag { width: 1%; white-space: nowrap; font-weight: 700; }
+  .box tr.warn td { background: #fff5d6; }
+  .box .actions .btn { flex: 1; min-height: 3.8rem; font-size: 1.15rem; }
+  #answer-row { display: flex; gap: .6rem; margin-bottom: 1rem; }
+  #answer-row[hidden] { display: none; }
+  #answer-text { flex: 1; font: inherit; font-size: 1.1rem; padding: .8rem; border: 2px solid var(--ink-2); border-radius: 10px; }
+
+  /* ---------- message ---------- */
+  #notice { position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); max-width: min(40rem, 92vw); background: var(--ink); color: #fff; padding: .9rem 1.2rem; border-radius: 12px; display: flex; gap: 1rem; align-items: center; z-index: 20; }
+  #notice[hidden] { display: none; }
+  #notice button { background: transparent; color: #fff; border: 2px solid #fff; border-radius: 8px; padding: .3rem .8rem; font-weight: 700; }
+
+  @media (max-width: 560px) {
+    .write .row { flex-direction: column; }
+    header { padding: .8rem 1rem; }
+    main { padding: 1rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cerfa <span>· votre assistant pour Internet</span></h1>
+  <div class="spacer"></div>
+  <div class="textsize" role="group" aria-label="Taille du texte">
+    <span>Taille du texte</span>
+    <button class="small-btn" id="smaller" aria-label="Texte plus petit">A−</button>
+    <button class="small-btn" id="bigger" aria-label="Texte plus grand">A+</button>
+  </div>
+  <a class="expert" href="/expert">Mode expert</a>
+</header>
+
+<main>
+  <div class="col">
+    <section class="talk" aria-label="Parler à l'assistant">
+      <button id="mic" aria-label="Parler">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/>
+        </svg>
+      </button>
+      <div id="mic-label">Appuyez pour parler</div>
+      <div id="status" role="status" aria-live="polite">Dites-moi ce que vous voulez faire sur Internet.</div>
+    </section>
+
+    <section class="write">
+      <label for="text">Ou écrivez votre demande</label>
+      <div class="row">
+        <input id="text" type="text" autocomplete="off" placeholder="Écrivez ce que vous voulez faire">
+        <button class="btn primary" id="send">Envoyer</button>
+      </div>
+      <p class="hint">Vous pouvez demander une information, trouver une démarche, ouvrir un site,
+        comparer des prix ou remplir un formulaire. Je vous demande toujours votre accord avant d'envoyer,
+        de payer ou de commander quoi que ce soit.</p>
+    </section>
+
+    <section id="result" hidden aria-live="polite">
+      <h2>Voici la réponse</h2>
+      <p class="asked"></p>
+      <p class="answer"></p>
+      <ul class="sources"></ul>
+    </section>
+
+    <section>
+      <h2>Ce que fait l'assistant</h2>
+      <ol id="steps" aria-live="polite"><li class="empty" style="display:block;background:none;padding:0">Rien pour l'instant. Les étapes s'afficheront ici, une par une.</li></ol>
+    </section>
+
+    <div class="actions">
+      <button class="btn quiet" id="stop">Arrêter l'assistant</button>
+    </div>
+  </div>
+
+  <section class="site" aria-label="Le site ouvert par l'assistant">
+    <p id="where">Aucun site ouvert pour l'instant.</p>
+    <div class="frame">
+      <img id="shot" alt="Ce que l'assistant voit à l'écran" hidden>
+      <div class="ph" id="ph"><b>Le site s'affichera ici</b>Quand l'assistant ouvre une page, vous la voyez ici en même temps que lui.</div>
+    </div>
+  </section>
+</main>
+
+<!-- accord avant une action irréversible, ou question de l'assistant -->
+<div id="ask" hidden role="dialog" aria-modal="true" aria-labelledby="ask-title">
+  <div class="box">
+    <h2 id="ask-title">Avant de continuer, j'ai besoin de votre accord</h2>
+    <p class="what" id="ask-what"></p>
+    <div id="ask-recap"></div>
+    <div id="answer-row" hidden>
+      <input id="answer-text" type="text" autocomplete="off" aria-label="Votre réponse">
+    </div>
+    <div class="actions">
+      <button class="btn no" id="ask-no">Non, annuler</button>
+      <button class="btn ok" id="ask-yes">Oui, continuer</button>
+    </div>
+  </div>
+</div>
+
+<div id="notice" hidden role="alert"><span id="notice-text"></span><button id="notice-close">Fermer</button></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const host = (u) => { try { return new URL(u).host.replace(/^www\./, ""); } catch (_) { return ""; } };
+let state = { status: "idle", steps: [] };
+let lastStatus = "idle", lastShotKey = "", lastAnswer = "", busyLocal = false, askKind = null;
+
+// ---------- taille du texte (mémorisée) ----------
+const SIZES = [100, 112.5, 125, 140, 160];
+let sizeIdx = 2;
+try { const v = Number(localStorage.getItem("cerfa.size")); if (SIZES.includes(v)) sizeIdx = SIZES.indexOf(v); } catch (_) {}
+function applySize() {
+  document.documentElement.style.fontSize = SIZES[sizeIdx] + "%";
+  try { localStorage.setItem("cerfa.size", SIZES[sizeIdx]); } catch (_) {}
+}
+$("#smaller").onclick = () => { sizeIdx = Math.max(0, sizeIdx - 1); applySize(); };
+$("#bigger").onclick = () => { sizeIdx = Math.min(SIZES.length - 1, sizeIdx + 1); applySize(); };
+applySize();
+
+// ---------- messages (restent affichés jusqu'à ce qu'on les ferme) ----------
+function notice(text) { $("#notice-text").textContent = text; $("#notice").hidden = false; }
+$("#notice-close").onclick = () => { $("#notice").hidden = true; };
+
+// ---------- ce que fait l'assistant, en français courant ----------
+function sentence(s) {
+  const a = s.args || {};
+  if (!s.ok && s.tool === "click") return "Je voulais cliquer sur un bouton d'envoi : j'attends d'abord votre accord.";
+  if (!s.ok) return "Ça n'a pas marché, j'essaie autrement.";
+  switch (s.tool) {
+    case "navigate": return "J'ouvre le site " + (host(a.url) || a.url || "") + ".";
+    case "web_search": return "Je cherche « " + (a.query || "") + " » sur Internet.";
+    case "click": return "Je clique sur la page.";
+    case "type": return "J'écris « " + (a.text || "") + " ».";
+    case "press_key": return a.key === "Enter" ? "J'appuie sur la touche Entrée." : "J'appuie sur une touche du clavier.";
+    case "scroll": return a.direction === "up" ? "Je remonte dans la page." : "Je descends dans la page.";
+    case "wait": return "J'attends que la page se charge.";
+    case "go_back": return "Je reviens à la page précédente.";
+    case "request_confirmation": return "Je vous demande votre accord.";
+    case "ask_user": return "Je vous pose une question.";
+    case "answer": return "C'est terminé.";
+    default: return "Je continue.";
+  }
+}
+let lastStepsLen = -1;
+function renderSteps() {
+  const steps = state.steps || [];
+  if (steps.length === lastStepsLen) return;
+  lastStepsLen = steps.length;
+  if (!steps.length) return;
+  // Clic puis saisie : une seule ligne « J'écris … » suffit, le clic n'apporte rien à l'utilisateur.
+  const shown = steps.filter((s, i) => !(s.tool === "click" && s.ok && steps[i + 1] && steps[i + 1].tool === "type"));
+  $("#steps").innerHTML = shown.slice(-8).map((s) => {
+    const cls = !s.ok ? "ko" : s.tool === "answer" ? "done" : "";
+    const icon = !s.ok ? "!" : s.tool === "answer" ? "✓" : "•";
+    return `<li class="${cls}"><span class="ic" aria-hidden="true">${icon}</span><span>${esc(sentence(s))}</span></li>`;
+  }).join("");
+}
+
+// ---------- état de l'assistant ----------
+const STATUS = {
+  idle: "Dites-moi ce que vous voulez faire sur Internet.",
+  running: "Je m'en occupe…",
+  listening: "C'est fait. Vous pouvez me demander autre chose.",
+  done: "C'est fait. Vous pouvez me demander autre chose.",
+  awaiting_confirmation: "J'attends votre accord.",
+  awaiting_input: "J'ai besoin d'une information.",
+  aborted: "D'accord, je n'ai rien envoyé.",
+  error: "Je n'ai pas réussi. Essayez de reformuler votre demande.",
+  interrupted: "Dites-moi ce que vous voulez faire sur Internet.",  // ancien run arrêté : on repart à zéro
+};
+function setStatus(text, busy) { $("#status").textContent = text; $("#status").classList.toggle("busy", !!busy); }
+
+function render() {
+  const s = state.status;
+  if (!recording && !transcribing && !busyLocal) setStatus(STATUS[s] || STATUS.idle, s === "running");
+  renderSteps();
+  renderSite();
+
+  if (s !== lastStatus) {
+    if (s === "awaiting_confirmation") openAsk("confirm");
+    else if (s === "awaiting_input") openAsk("input");
+    else closeAsk();
+    lastStatus = s;
+  }
+  if (["done", "listening", "aborted"].includes(s) && state.answer && state.answer !== lastAnswer) {
+    lastAnswer = state.answer;
+    showResult(state.task, state.answer, []);
+  }
+}
+
+function renderSite() {
+  const url = state.url && state.url !== "about:blank" ? state.url : "";
+  const label = state.running ? "Site ouvert" : "Dernière page vue";
+  $("#where").innerHTML = url ? `${label} : <b>${esc(host(url) || url)}</b>` : "Aucun site ouvert pour l'instant.";
+  if (!state.screenshot) return;
+  const key = (state.steps || []).length + ":" + (state.shot_at || "");
+  if (key === lastShotKey) return;
+  lastShotKey = key;
+  const img = $("#shot");
+  img.onload = () => { img.hidden = false; $("#ph").hidden = true; };
+  img.onerror = () => { img.hidden = true; $("#ph").hidden = false; };
+  img.src = "/live.png?t=" + Date.now();
+}
+
+async function poll() {
+  try {
+    const r = await fetch("/state", { cache: "no-store" });
+    state = await r.json();
+    render();
+  } catch (_) { /* serveur pas encore prêt */ }
+  setTimeout(poll, 600);
+}
+
+// ---------- réponse ----------
+function showResult(question, answer, sources) {
+  const box = $("#result");
+  box.querySelector(".asked").textContent = question ? "Votre demande : « " + question + " »" : "";
+  box.querySelector(".answer").textContent = String(answer).replace(/\*\*/g, "");
+  box.querySelector(".sources").innerHTML = (sources || []).slice(0, 3).map((s) =>
+    `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || host(s.url))}</a> (${esc(host(s.url))})</li>`).join("");
+  box.hidden = false;
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+// ---------- envoyer une demande ----------
+const QUESTION = /^(quel|quelle|quels|quelles|comment|combien|est-ce|qu'est-ce|o[uù]\b|quand|pourquoi|faut-il|dois-je|puis-je|qui)\b/i;
+const ACTION = /\b(remplis|remplir|envoie|envoyer|trouve|trouver|cherche|va\b|aller|ouvre|ouvrir|clique|d[ée]clar|inscri|r[ée]serv|command|compare)/i;
+const isQuestion = (t) => !ACTION.test(t) && (t.trim().endsWith("?") || QUESTION.test(t.trim()));
+
+async function post(path, body) {
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || "le serveur a refusé la demande");
+  return d;
+}
+
+async function handleText(text) {
+  text = (text || "").trim();
+  if (!text) return;
+  $("#text").value = "";
+  $("#result").hidden = true;
+
+  // Une question simple : réponse rapide, sans ouvrir de site.
+  if (isQuestion(text)) {
+    busyLocal = true;
+    setStatus("Je cherche la réponse…", true);
+    try {
+      const d = await post("/ask", { question: text });
+      showResult(text, d.answer, d.sources);
+      setStatus("Voici ce que j'ai trouvé. Vous pouvez me demander autre chose.");
+      return;
+    } catch (_) {
+      /* pas de recherche rapide disponible : l'assistant ouvre le navigateur */
+    } finally { busyLocal = false; }
+  }
+
+  setStatus("Je m'en occupe…", true);
+  try {
+    if (state.running && state.status === "listening") await post("/instruct", { task: text });
+    else await post("/start", { task: text, url: "about:blank", interactive: true });
+  } catch (e) {
+    notice("Je n'ai pas pu lancer l'assistant : " + e.message);
+  }
+}
+$("#send").onclick = () => handleText($("#text").value);
+$("#text").addEventListener("keydown", (e) => { if (e.key === "Enter") handleText($("#text").value); });
+$("#stop").onclick = async () => {
+  try { const d = await post("/stop"); setStatus(d.stopped ? "L'assistant est arrêté." : "L'assistant était déjà arrêté."); }
+  catch (e) { notice("Impossible d'arrêter : " + e.message); }
+};
+
+// ---------- micro : un appui pour parler, un appui pour envoyer ----------
+let recorder = null, chunks = [], recording = false, transcribing = false, startedAt = 0;
+async function toggleMic() {
+  if (recording) { recorder.stop(); return; }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, channelCount: 1 } });
+  } catch (e) {
+    notice("Le micro n'est pas autorisé. Cliquez sur le cadenas à gauche de l'adresse du site, puis autorisez le micro.");
+    return;
+  }
+  const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
+  recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+  chunks = [];
+  recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  recorder.onstop = async () => {
+    stream.getTracks().forEach((t) => t.stop());
+    recording = false;
+    $("#mic").classList.remove("rec");
+    $("#mic").setAttribute("aria-label", "Parler");
+    $("#mic-label").textContent = "Appuyez pour parler";
+    const blob = new Blob(chunks, { type: mime || "audio/webm" });
+    if (performance.now() - startedAt < 700 || blob.size < 2000) { setStatus("Je n'ai rien entendu. Appuyez, parlez, puis appuyez à nouveau."); return; }
+    transcribing = true;
+    setStatus("J'écoute ce que vous avez dit…", true);
+    try {
+      const r = await fetch("/transcribe", { method: "POST", body: blob });
+      const d = await r.json();
+      if (!d.text) { setStatus("Je n'ai pas compris. Pouvez-vous répéter ?"); return; }
+      transcribing = false;
+      if (askKind === "input") { $("#answer-text").value = d.text; return; }
+      if (askKind === "confirm") { reply(/\b(oui|ouais|ok|d'accord|vas[- ]y|envoie|valide)\b/i.test(d.text) && !/\b(non|pas|annule|stop)\b/i.test(d.text)); return; }
+      $("#text").value = d.text;
+      handleText(d.text);
+    } catch (e) {
+      notice("La reconnaissance de la voix ne répond pas. Vous pouvez écrire votre demande.");
+    } finally { transcribing = false; }
+  };
+  recorder.start(100);
+  recording = true;
+  startedAt = performance.now();
+  $("#mic").classList.add("rec");
+  $("#mic").setAttribute("aria-label", "Arrêter et envoyer");
+  $("#mic-label").textContent = "Je vous écoute… appuyez quand vous avez fini";
+  setStatus("Parlez maintenant.");
+}
+$("#mic").onclick = toggleMic;
+addEventListener("keydown", (e) => {
+  if (e.code === "Space" && !["INPUT", "TEXTAREA", "BUTTON"].includes(document.activeElement.tagName)) { e.preventDefault(); toggleMic(); }
+});
+
+// ---------- accord / question ----------
+const FLAG = { ok: "✓ conforme", diff: "⚠ à vérifier", missing: "⚠ vide", other: "" };
+function openAsk(kind) {
+  askKind = kind;
+  const confirm = kind === "confirm";
+  $("#ask-title").textContent = confirm ? "Avant de continuer, j'ai besoin de votre accord" : "J'ai besoin d'une information";
+  $("#ask-what").textContent = state.awaiting || "";
+  const rows = confirm ? (state.recap || []) : [];
+  $("#ask-recap").innerHTML = rows.length ? "<table>" + rows.map((r) =>
+    `<tr class="${r.status === "diff" || r.status === "missing" ? "warn" : ""}"><td class="k">${esc(r.label)}</td><td>${esc(r.value || "(vide)")}</td><td class="flag">${FLAG[r.status] || ""}</td></tr>`).join("") + "</table>" : "";
+  $("#answer-row").hidden = confirm;
+  $("#ask-yes").textContent = confirm ? "Oui, continuer" : "Répondre";
+  $("#ask-no").textContent = confirm ? "Non, annuler" : "Je ne sais pas";
+  $("#ask").hidden = false;
+  setTimeout(() => (confirm ? $("#ask-yes") : $("#answer-text")).focus(), 50);
+}
+function closeAsk() { $("#ask").hidden = true; askKind = null; $("#answer-text").value = ""; }
+async function reply(yes) {
+  const kind = askKind;
+  closeAsk();
+  try {
+    if (kind === "confirm") await post("/confirm", { approved: !!yes });
+    else await post("/answer", { text: yes ? $("#answer-text").value || "" : "" });
+  } catch (e) { notice("Votre réponse n'est pas partie : " + e.message); }
+}
+$("#ask-yes").onclick = () => {
+  if (askKind === "input") { const v = $("#answer-text").value.trim(); if (!v) { $("#answer-text").focus(); return; } post("/answer", { text: v }).catch((e) => notice(e.message)); closeAsk(); return; }
+  reply(true);
+};
+$("#ask-no").onclick = () => reply(false);
+$("#answer-text").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#ask-yes").click(); });
+
+poll();
+</script>
+</body>
+</html>

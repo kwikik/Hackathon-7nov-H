@@ -137,9 +137,6 @@
   .placeholder { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--dim); font-size: 13px; padding: 30px; }
   .placeholder[hidden] { display: none; }
   .placeholder .big { font-size: 22px; color: var(--text); font-weight: 600; letter-spacing: -.02em; margin-bottom: 8px; }
-  .placeholder .examples { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-  .placeholder .ex { font-size: 12.5px; color: var(--muted); border: 1px solid var(--line-2); border-radius: 999px; padding: 7px 12px; background: rgba(255,255,255,.02); cursor: pointer; }
-  .placeholder .ex:hover { color: var(--text); border-color: rgba(139,107,255,.5); }
   #ph-default[hidden], #ph-answer[hidden] { display: none; }
   /* réponse express en grand, au centre de l'écran */
   #ph-answer { max-width: 760px; text-align: left; animation: slidein .5s ease-out; }
@@ -250,6 +247,7 @@
 <header>
   <div class="brand"><div class="logo"></div><b>Cerfa</b><span>ton agent web, à la voix</span></div>
   <div class="spacer"></div>
+  <a class="chip" href="/" style="text-decoration:none">Interface simple</a>
   <div class="stack">
     <span class="chip" title="Modèles utilisés">Holo · Gladia Solaria-3 · Linkup</span>
     <span class="chip" id="status" data-s="idle"><i></i><span>prêt</span></span>
@@ -267,7 +265,7 @@
       <div id="state-label">Je t'écoute quand tu veux</div>
       <div id="michint">maintiens <kbd>Espace</kbd> (ou l'orbe) pendant que tu parles</div>
       <div id="latency"></div>
-      <div id="transcript" class="empty">« Compare le prix des AirPods Pro sur trois sites » · « Trouve la démarche pour déclarer la vente de mon véhicule »</div>
+      <div id="transcript" class="empty">Ta consigne s'affichera ici.</div>
     </div>
 
     <!-- la consigne -->
@@ -281,15 +279,7 @@
       <details class="settings">
         <summary>Réglages de la démo</summary>
         <div class="settings-body">
-          <select id="scenario">
-            <option value="about:blank" selected>Aucun site — il va où tu lui dis</option>
-            <option value="https://www.google.fr/">Google</option>
-            <option value="https://www.service-public.gouv.fr/">Service-Public — trouver une démarche</option>
-            <option value="https://ants.gouv.fr/">ANTS — trouver une démarche</option>
-            <option value="https://immatriculation.ants.gouv.fr/demarches-en-ligne">ANTS — démarches immatriculation</option>
-            <option value="">Formulaire local de test</option>
-          </select>
-          <input type="text" id="url" spellcheck="false" placeholder="URL de départ (facultatif)">
+          <input type="text" id="url" spellcheck="false" placeholder="Site de départ (facultatif — sinon il va où tu lui dis)">
           <select id="view">
             <option value="shot" selected>Site affiché dans l'interface (capture)</option>
             <option value="side">Site ouvert à côté (fenêtre à droite de l'écran)</option>
@@ -329,13 +319,6 @@
           <div id="ph-default">
             <div class="big">Dis-lui ce que tu veux faire.</div>
             Il navigue sur le web comme toi : il cherche, compare, lit, remplit les formulaires,<br>et te demande ton feu vert avant toute action irréversible.
-            <div class="examples">
-              <span class="ex">Compare le prix des AirPods Pro sur trois sites</span>
-              <span class="ex">Trouve un restaurant italien ouvert ce soir près de la gare de Lyon</span>
-              <span class="ex">Résume la page d'accueil de lemonde.fr</span>
-              <span class="ex">Trouve la page pour déclarer la vente de mon véhicule</span>
-              <span class="ex">Combien coûte un passeport ?</span>
-            </div>
           </div>
         </div>
       </div>
@@ -657,6 +640,8 @@ function renderTimeline() {
 
 // ---------- écran de l'agent + point de clic ----------
 function currentUrl() {
+  // Agent en attente : tu peux naviguer toi-même, l'adresse réelle de la page fait foi.
+  if (state.status === "listening" && state.url) return state.url;
   const steps = state.steps || [];
   for (let i = steps.length - 1; i >= 0; i--) {
     const s = steps[i];
@@ -676,11 +661,15 @@ function renderScreen() {
   if (state.screenshot) {
     $("#shot").hidden = false;
     $("#shotph").hidden = true;
-    const n = (state.steps || []).length;
+    // Nouvelle capture : après une action de l'agent, ou quand tu navigues toi-même.
+    const n = (state.steps || []).length + ":" + (state.shot_at || "");
     if (n !== lastShotStep) {
       lastShotStep = n;
       const img = $("#shot");
-      img.onload = () => placeMarker();
+      // Le point de clic ne réapparaît que sur une nouvelle action, pas sur la recopie d'écran.
+      const steps = (state.steps || []).length, fresh = steps !== lastMarkerSteps;
+      lastMarkerSteps = steps;
+      img.onload = () => { if (fresh) placeMarker(); };
       // Capture d'un ancien run disparue : on remet l'accueil plutôt qu'une image cassée.
       img.onerror = () => { img.hidden = true; $("#shotph").hidden = false; };
       img.src = "/live.png?t=" + Date.now();
@@ -693,7 +682,7 @@ function renderScreen() {
 
 // Holo raisonne en coordonnées [0, 1000] sur la capture ; on les replace sur
 // l'image affichée (object-fit: cover, calée en haut : quelques pixels rognés au plus).
-let markerTimer = null;
+let markerTimer = null, lastMarkerSteps = -1;
 function placeMarker() {
   const steps = state.steps || [];
   let click = null, typed = null;
@@ -986,7 +975,7 @@ async function startAgent() {
   if ($("#express").checked && task && isQuestion(task) && !$("#mock").checked) { askExpress(task); return; }
   const body = {
     task,
-    url: $("#url").value.trim() || $("#scenario").value,
+    url: $("#url").value.trim(),
     mock: $("#mock").checked,
     no_confirm: $("#noconfirm").checked,
     interactive: $("#converse").checked,
@@ -1016,7 +1005,6 @@ $("#stop").addEventListener("click", async () => {
     conversationMode = false;
   } catch (e) { banner("stop impossible : " + e.message, "Agent"); }
 });
-document.querySelectorAll(".ex").forEach((el) => el.addEventListener("click", () => handleText(el.textContent)));
 
 // ---------- réponses à l'agent ----------
 const isYes = (t) => /\b(oui|ouais|yes|ok|d'accord|valide|confirme|envoye|envoyer|vas[- ]y)\b/i.test(t)
@@ -1055,7 +1043,6 @@ $("#vb-send").addEventListener("click", sendTyped);
 $("#vb-input").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); sendTyped(); } });
 
 // ---------- divers ----------
-$("#scenario").addEventListener("change", (e) => { $("#url").value = e.target.value; });
 function applyView(announce) {
   const side = $("#view").value === "side";
   document.body.classList.toggle("side", side);

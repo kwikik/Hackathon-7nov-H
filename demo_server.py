@@ -5,7 +5,8 @@ Zéro dépendance : http.server + le dossier runs/ écrit par runner.py.
     python demo_server.py            -> http://localhost:8765
 
 Endpoints
-    GET  /            page de contrôle (demo/app.html)
+    GET  /            interface simple, gros texte (demo/simple.html)
+    GET  /expert      interface complète (demo/app.html)
     GET  /slides      deck de pitch
     GET  /state       état courant de l'agent (JSON)
     GET  /profile     profil utilisateur (JSON)
@@ -123,6 +124,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = urlparse(self.path).path
         if path in ("/", "/index.html"):
+            # Interface simple (gros texte, un bouton pour parler) : celle qu'on montre au public.
+            return self._file(ROOT / "demo" / "simple.html", "text/html; charset=utf-8")
+        if path == "/expert":
+            # Interface complète : orbe 3D, journal technique, réglages, récap détaillé.
             return self._file(ROOT / "demo" / "app.html", "text/html; charset=utf-8")
         if path == "/slides":
             return self._file(ROOT / "slides" / "index.html", "text/html; charset=utf-8")
@@ -317,10 +322,11 @@ class Handler(BaseHTTPRequestHandler):
             if _process and _process.poll() is None:
                 return _json(self, {"error": "un run est déjà en cours"}, 409)
 
+            # Aucune tâche ni aucun site imposés : l'agent part d'une page vide et va où on lui dit.
             task = (payload.get("task") or "").strip()
             if not payload.get("interactive") and not task:
-                task = "Remplis ce formulaire de demande administrative avec mes informations."
-            url = (payload.get("url") or "").strip() or (ROOT / "demo" / "test_form.html").as_uri()
+                return _json(self, {"error": "dis-moi ce que tu veux faire"}, 400)
+            url = (payload.get("url") or "").strip() or "about:blank"
             RUNS.mkdir(exist_ok=True)
             (RUNS / "answer.json").unlink(missing_ok=True)
             (RUNS / "state.json").unlink(missing_ok=True)

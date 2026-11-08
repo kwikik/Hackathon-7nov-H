@@ -92,7 +92,7 @@ DEMO_PORT=8765
 ```
 
 ```bash
-python agent.py                          # formulaire local de test
+python agent.py --task "..."             # part d'une page vide, va où on lui dit
 python agent.py --mock --headless        # répétition hors-ligne, sans clé
 python agent.py --url https://... --task "Remplis ma demande d'aide au permis et envoie-la"
 python agent.py --interactive --demo     # mode conversation, piloté depuis l'interface
@@ -102,8 +102,8 @@ python agent.py --interactive --demo     # mode conversation, piloté depuis l'i
 
 | Option | Défaut | Effet |
 |---|---|---|
-| `--url URL` | `demo/test_form.html` | Page sur laquelle le navigateur s'ouvre au départ. |
-| `--task "..."` | « Remplis ce formulaire… puis envoie-le » | Consigne en langage naturel. En mode `--interactive`, seulement la première consigne. |
+| `--url URL` | page vide | Page sur laquelle le navigateur s'ouvre au départ. Sans elle, l'agent va lui-même sur le bon site. |
+| `--task "..."` | aucune (obligatoire hors `--interactive`) | Consigne en langage naturel. En mode `--interactive`, seulement la première consigne. |
 | `--profile FICHIER` | `profile.json` | Données personnelles que l'agent a le droit de taper. |
 | `--model ID` | `HOLO_MODEL` du `.env`, sinon `holo4-35b-a3b` | Modèle Holo utilisé. |
 | `--mock` | non | Hors-ligne : n'appelle pas Holo, remplit en lisant la page. Pour répéter sans clé ni réseau. |
@@ -248,7 +248,7 @@ profile.json        données personnelles utilisées par l'agent
 
 demo/
   app.html          interface de contrôle
-  test_form.html    formulaire local, pour développer sans dépendre d'un vrai site
+  test_form.html    formulaire local, utilisé seulement par le mode hors-ligne (--mock)
 slides/index.html   deck de pitch (flèches ← →)
 video/              génération de la vidéo (script.md, timeline.json, render.py, mux.py)
 docs/               DEMO, AVANCEMENT, ROADMAP, IDEA — voir l'index docs/README.md

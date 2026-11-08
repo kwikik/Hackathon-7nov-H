@@ -45,6 +45,7 @@ class RunState:
     awaiting: str | None = None
     error: str | None = None
     screenshot: str | None = None
+    shot_at: float | None = None  # change à chaque nouvelle capture : l'interface recharge l'image
     recap: list[dict[str, Any]] | None = None  # champs relus juste avant une confirmation
 
     def to_dict(self) -> dict[str, Any]:
@@ -144,8 +145,25 @@ def set_status(
         st.answer = keep.get("answer")
         st.task = keep.get("task", "") or ""
         st.screenshot = keep.get("screenshot")
+        st.shot_at = keep.get("shot_at")
     st.awaiting = message
     _write_state(st)
+
+
+def mirror_page(page, keep: dict) -> dict:
+    """Recopie l'écran du navigateur dans l'interface quand l'utilisateur y navigue lui-même.
+
+    Appelé pendant que l'agent attend une consigne : sans ça, l'interface reste figée
+    sur la dernière capture de l'agent.
+    """
+    try:
+        png = page.screenshot(type="jpeg", quality=70)
+    except Exception:  # noqa: BLE001 - page en cours de chargement ou fermée : on réessaiera
+        return keep
+    RUNS_DIR.mkdir(exist_ok=True)
+    shot = RUNS_DIR / "live.png"
+    shot.write_bytes(png)
+    return {**keep, "screenshot": str(shot), "shot_at": time.time(), "final_url": page.url}
 
 
 def run(
@@ -256,6 +274,7 @@ def run(
             shot_path = RUNS_DIR / "live.png"
             shot_path.write_bytes(base64.b64decode(shot_b64))
             state.screenshot = str(shot_path)
+            state.shot_at = time.time()
             _write_state(state)
 
         state.status = "error"
