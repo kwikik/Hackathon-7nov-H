@@ -1,4 +1,4 @@
-"""Cerfa Agent — l'administratif français par la voix.
+"""Cerfa Agent — ton agent web, à la voix (recherche, navigation, formulaires).
 
 L'agent regarde l'écran, décide de l'action suivante et la joue dans un vrai
 navigateur. Les coordonnées viennent de Holo (H Company), l'exécution de Playwright.
@@ -79,6 +79,17 @@ def conversation(page, profile: dict, args, confirm, model_label: str) -> dict:
         if not task:
             continue
 
+        # Le profil a pu gagner une donnée depuis l'interface (« je l'enregistre ? ») :
+        # on le relit à chaque consigne, le modèle et le récap voient la nouvelle valeur.
+        try:
+            fresh = load_profile(Path(args.profile))
+            if fresh != profile:
+                profile = fresh
+                if planner is not None:
+                    planner.update_profile(profile)
+        except (OSError, json.JSONDecodeError):
+            pass
+
         # Un seul planner pour toute la conversation : le modèle se souvient des
         # consignes précédentes. Après une erreur, on repart d'un historique propre.
         if planner is None:
@@ -140,6 +151,12 @@ def main() -> int:
         action="store_true",
         help="mode conversation : le navigateur reste ouvert et l'agent attend les consignes une par une",
     )
+    parser.add_argument(
+        "--window",
+        default=None,
+        metavar="X,Y,L,H",
+        help="place la fenêtre du navigateur à l'écran (ex: 960,0,960,1040 = moitié droite d'un écran 1920)",
+    )
     args = parser.parse_args()
 
     load_dotenv(ROOT / ".env")
@@ -156,6 +173,12 @@ def main() -> int:
     from playwright.sync_api import sync_playwright
 
     viewport = {"width": 1280, "height": 800}
+    launch_args: list[str] = []
+    if args.window:
+        x, y, w, h = (int(v) for v in args.window.split(","))
+        launch_args = [f"--window-position={x},{y}", f"--window-size={w},{h}"]
+        # La page doit tenir dans la fenêtre : on retire la barre d'onglets et d'adresse (~90 px).
+        viewport = {"width": max(800, w - 16), "height": max(500, h - 90)}
     with sync_playwright() as pw:
         if args.profile_dir:
             context = pw.chromium.launch_persistent_context(
@@ -163,11 +186,12 @@ def main() -> int:
                 headless=args.headless,
                 viewport=viewport,
                 locale="fr-FR",
+                args=launch_args,
             )
             page = context.pages[0] if context.pages else context.new_page()
             closer = context.close
         else:
-            browser = pw.chromium.launch(headless=args.headless)
+            browser = pw.chromium.launch(headless=args.headless, args=launch_args)
             page = browser.new_page(viewport=viewport, locale="fr-FR")
             closer = browser.close
 

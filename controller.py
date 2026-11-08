@@ -13,7 +13,8 @@ from typing import Any, Callable
 
 # Un clic sur un de ces libellés est considéré comme irréversible.
 SUBMIT_WORDS = re.compile(
-    r"\b(envoyer|valider|soumettre|submit|send|confirmer|payer|signer|déposer|deposer)\b",
+    r"\b(envoyer|valider|soumettre|submit|send|confirmer|payer|signer|déposer|deposer"
+    r"|acheter|commander|réserver|reserver|buy|checkout|publier|supprimer)\b",
     re.IGNORECASE,
 )
 
@@ -98,10 +99,15 @@ TOOL_SPECS: list[dict[str, Any]] = [
     ),
     _tool(
         "web_search",
-        "Cherche sur les sites officiels (service-public, ANTS, impots, CAF, ameli, URSSAF...) la page exacte "
-        "d'une démarche. Renvoie titres, URL et extraits. À utiliser AVANT de naviguer quand tu ne connais pas "
-        "l'URL de la démarche, au lieu d'explorer les menus.",
-        {"query": {"type": "string", "description": "La démarche, en français. Ex : « déclarer la vente de mon véhicule »."}},
+        "Recherche web : renvoie titres, URL et extraits des meilleures pages. À utiliser AVANT de naviguer "
+        "quand tu ne connais pas l'URL exacte, au lieu d'explorer les menus.",
+        {
+            "query": {"type": "string", "description": "Ce que tu cherches. Ex : « horaires piscine Pontoise », « déclarer la vente de mon véhicule »."},
+            "official_only": {
+                "type": "boolean",
+                "description": "true pour une démarche administrative française : ne renvoie que des sites officiels (service-public, ANTS, impots, CAF, ameli...).",
+            },
+        },
         ["query"],
     ),
     _tool(
@@ -266,10 +272,10 @@ class PageController:
             if not query:
                 return json.dumps({"ok": False, "error": "query vide"}, ensure_ascii=False)
             try:
-                results = search(query)
+                results = search(query, official_only=bool(args.get("official_only")))
             except (SearchError, Exception) as exc:  # noqa: BLE001 - l'agent doit pouvoir naviguer sans
                 return json.dumps(
-                    {"ok": False, "error": f"recherche indisponible : {exc}. Navigue directement sur le site officiel."},
+                    {"ok": False, "error": f"recherche indisponible : {exc}. Navigue directement sur le site le plus pertinent."},
                     ensure_ascii=False,
                 )
             top = results[0]["url"] if results else "aucun résultat"

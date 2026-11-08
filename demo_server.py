@@ -221,7 +221,48 @@ class Handler(BaseHTTPRequestHandler):
             return _json(self, {"stopped": False, "reason": "aucun run en cours"})
         if path == "/instruct":
             return self._instruct(body)
+        if path == "/ask":
+            return self._ask(body)
+        if path == "/profile/remember":
+            return self._remember(body)
         self.send_error(404)
+
+    def _ask(self, body: bytes) -> None:
+        """Question express : réponse sourcée Linkup, sans lancer l'agent ni de navigateur."""
+        try:
+            question = str(json.loads(body or b"{}").get("question", "")).strip()
+        except json.JSONDecodeError:
+            return _json(self, {"error": "json invalide"}, 400)
+        if not question:
+            return _json(self, {"error": "question vide"}, 400)
+        try:
+            from search import SearchError, answer
+
+            started = time.monotonic()
+            result = answer(question)
+            result["seconds"] = round(time.monotonic() - started, 2)
+            return _json(self, result)
+        except SearchError as exc:
+            return _json(self, {"error": str(exc)}, 503)
+        except Exception as exc:  # noqa: BLE001
+            return _json(self, {"error": f"{type(exc).__name__}: {exc}"}, 500)
+
+    def _remember(self, body: bytes) -> None:
+        """Ajoute au profil une réponse donnée à l'agent : il ne la redemandera plus."""
+        try:
+            payload = json.loads(body or b"{}")
+        except json.JSONDecodeError:
+            return _json(self, {"error": "json invalide"}, 400)
+        value = str(payload.get("value", "")).strip()
+        key = profile_key(str(payload.get("key") or payload.get("question") or ""))
+        if not value or not key:
+            return _json(self, {"error": "clé ou valeur vide"}, 400)
+        path = ROOT / "profile.json"
+        with _lock:
+            profile = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+            profile[key] = value[:200]
+            path.write_text(json.dumps(profile, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return _json(self, {"ok": True, "key": key, "value": profile[key], "profile": profile})
 
     def _instruct(self, body: bytes) -> None:
         """File d'attente de consignes pour l'agent en mode conversation."""
@@ -306,6 +347,13 @@ class Handler(BaseHTTPRequestHandler):
                 cmd.extend(["--model", str(payload["model"])])
             if payload.get("interactive"):
                 cmd.append("--interactive")
+            # Mode « site à côté » : position et taille de la fenêtre Chromium [x, y, largeur, hauteur].
+            window = payload.get("window")
+            if isinstance(window, list) and len(window) == 4:
+                try:
+                    cmd.extend(["--window", ",".join(str(int(v)) for v in window)])
+                except (TypeError, ValueError):
+                    return _json(self, {"error": "window invalide"}, 400)
 
             log = (RUNS / "agent.log").open("w", encoding="utf-8")
             _process = subprocess.Popen(cmd, cwd=str(ROOT), stdout=log, stderr=subprocess.STDOUT)
@@ -320,6 +368,25 @@ class Handler(BaseHTTPRequestHandler):
         # runner.py attend runs/answer.json
         (RUNS / "answer.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return _json(self, {"ok": True})
+
+
+_STOP_WORDS = {
+    "quel", "quelle", "quels", "quelles", "est", "sont", "votre", "vos", "ton", "ta", "tes", "mon", "ma",
+    "le", "la", "les", "l", "de", "du", "des", "d", "un", "une", "pouvez", "vous", "peux", "tu", "me",
+    "donner", "indiquer", "preciser", "communiquer", "merci", "s", "il", "plait", "qu", "que", "quoi",
+    "c", "ce", "cette", "a", "au", "aux", "pour", "sur", "en", "et", "ou", "avez", "as", "actuel",
+    "actuelle", "exact", "exacte", "svp",
+}
+
+
+def profile_key(text: str) -> str:
+    """« Quel est votre numéro de permis de conduire ? » -> « numero_permis_conduire »."""
+    import re
+    import unicodedata
+
+    plain = "".join(c for c in unicodedata.normalize("NFD", text) if unicodedata.category(c) != "Mn").lower()
+    words = [w for w in re.sub(r"[^a-z0-9]+", " ", plain).split() if w not in _STOP_WORDS]
+    return "_".join(words[:4])
 
 
 def _stop_agent() -> bool:

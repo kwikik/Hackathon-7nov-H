@@ -1,9 +1,14 @@
 # Cerfa Agent
 
-**L'administratif français, par la voix.**
+**Ton agent web, à la voix.**
 
-Tu dis ce que tu veux. L'agent ouvre le site, regarde l'écran, remplit le formulaire,
-te montre ce qu'il a écrit — et attend ton feu vert avant d'envoyer.
+Tu dis ce que tu veux. L'agent ouvre un vrai navigateur, regarde l'écran et fait le travail :
+chercher une info, comparer des prix, lire et résumer une page, trouver une démarche,
+remplir un formulaire. Avant toute action irréversible (envoyer, payer, commander, réserver,
+publier), il s'arrête et attend ton feu vert.
+
+L'administratif français reste le cas d'usage phare de la démo, parce que c'est là que
+remplir des formulaires fait le plus mal.
 
 Projet du hackathon **H Company × 42AI — Computer Use Agents**, 7–8 novembre 2026.
 
@@ -35,18 +40,19 @@ Voix  ──▶ Gladia (STT)  ──▶ consigne
 ## Ce qui rend ce projet différent
 
 - **Aucun script par site.** Le moteur ne parse pas le DOM pour deviner les champs : il *regarde*
-  l'écran et localise l'élément à cliquer. Le même code marche sur n'importe quel formulaire.
+  l'écran et localise l'élément à cliquer. Le même code marche sur n'importe quel site.
 - **Coordonnées normalisées `[0, 1000]`.** Convention Holo respectée de bout en bout, conversion en
   pixels CSS dans un seul module (`controller.py`).
-- **Garde-fou d'envoi.** Un clic sur « Envoyer » / « Valider » / « Payer » est **bloqué par le
-  harnais** tant qu'une confirmation humaine n'a pas été donnée. Ce n'est pas une consigne au modèle :
+- **Garde-fou des actions irréversibles.** Un clic sur « Envoyer », « Valider », « Payer »,
+  « Acheter », « Commander », « Réserver », « Publier » ou « Supprimer » est **bloqué par le harnais** tant qu'une confirmation humaine n'a pas été donnée. Ce n'est pas une consigne au modèle :
   c'est une barrière dans le code.
 - **Zéro invention de données.** Les valeurs saisies viennent d'un profil local (`profile.json`).
   Si une donnée obligatoire manque, l'agent appelle `ask_user` au lieu de remplir au hasard.
 - **Il montre ce qu'il va envoyer.** Avant l'envoi, chaque champ du formulaire est relu à l'écran
   et comparé au profil : on valide ce qui part vraiment, pas ce que le modèle dit avoir tapé.
-- **Il cherche avant de naviguer.** Un outil `web_search` (Linkup) trouve la page exacte de la
-  démarche, sur les seuls sites officiels. Mesuré : « déclarer la vente de mon véhicule » en
+- **Il cherche avant de naviguer.** Un outil `web_search` (Linkup) trouve la bonne page sur tout
+  le web ; pour une démarche administrative, l'agent le restreint aux sites officiels
+  (`official_only`), pour ne jamais atterrir sur un site qui imite l'administration. Mesuré : « déclarer la vente de mon véhicule » en
   **3 pas** (recherche → page officielle → réponse) au lieu de 9 en explorant les menus.
 - **Mode hors-ligne.** `--mock` rejoue le scénario complet sans clé API, pour répéter avant la scène.
 
@@ -107,6 +113,7 @@ python agent.py --interactive --demo     # mode conversation, piloté depuis l'i
 | `--max-steps N` | `30` | Nombre maximum d'actions avant abandon. |
 | `--pause SECONDES` | `0` | Pause entre deux actions, pour une démo lisible (l'interface envoie `0.35`). |
 | `--profile-dir DOSSIER` | aucun | Profil navigateur persistant : cookies et sessions gardés entre deux runs (ex. `runs/browser-profile`). |
+| `--window X,Y,L,H` | aucune | Place la fenêtre du navigateur à l'écran, et adapte la page à sa taille (mode « site ouvert à côté » de l'interface). |
 | `--wait-login` | non | Pause au démarrage pour te connecter à la main, puis Entrée dans le terminal. Ne marche pas depuis l'interface web. |
 
 Vrai site, en gardant la session et en se connectant à la main la première fois :
@@ -154,21 +161,27 @@ Sans `DEMO_PASSWORD`, l'accès distant est refusé. En local (`localhost`), pas 
 Ctrl+C coupe le tunnel, la démo locale continue. Un seul run à la fois pour tout le monde, et la
 fenêtre Chromium de l'agent s'ouvre sur ton PC : le jury suit l'écran de l'agent dans l'interface.
 
-La page (`demo/app.html`) écoute la voix (micro du navigateur → Gladia), lance l'agent et affiche en direct :
+La page (`demo/app.html`, HTML/CSS/JS sans build) écoute la voix (micro du navigateur → Gladia),
+lance l'agent et affiche en direct :
 
+- **l'orbe vocale 3D** (Three.js depuis un CDN) : elle respire au repos, se déforme au rythme de ta
+  voix quand tu maintiens Espace, tourbillonne quand l'agent travaille et
+  passe en couleurs chaudes quand il attend ta validation. Elle sert aussi de bouton micro. Sans
+  WebGL ou sans réseau, une sphère CSS prend le relais. Elle est petite au repos et grandit
+  pendant que tu parles,
 - la transcription de la consigne,
-- la capture de l'écran de l'agent (rafraîchie à chaque pas),
-- le journal des actions (tool, arguments, résultat, durée),
+- l'écran de l'agent dans un cadre de navigateur (adresse de la page en cours), avec **le point de
+  clic** : une onde à l'endroit exact où Holo a cliqué (coordonnées [0, 1000] replacées sur
+  l'image) et le texte tapé en surimpression,
+- **la frise des actions** : une icône par type d'action (recherche, page, clic, saisie,
+  validation…), le détail, la durée, et la dernière pensée du modèle,
 - la question de l'agent quand une donnée manque, et la demande de confirmation avant envoi,
   auxquelles on peut répondre à la voix (maintenir Espace, « oui », « vas-y ») ou par les boutons,
 - **le récap avant envoi** : au moment de la confirmation, l'agent relit le formulaire *à l'écran*
   et l'interface montre chaque champ qui va partir, comparé au profil (✓ profil, ≠ profil avec la
   valeur attendue, hors profil, obligatoire vide).
 
-**L'agent parle** (case cochée par défaut) : il lit à voix haute ses questions, sa demande de
-confirmation (en signalant les champs à vérifier) et sa réponse finale. Synthèse vocale du
-navigateur, sans réseau ni dépendance ; les URL sont remplacées par « le lien est affiché à
-l'écran ». Il se tait dès qu'on maintient Espace.
+L'agent ne parle pas : tout ce qu'il dit (questions, confirmations, réponses) s'affiche à l'écran.
 
 **Mode conversation** (case cochée par défaut) : le navigateur reste ouvert entre deux consignes.
 Chaque nouvelle phrase est envoyée à `/instruct` et l'agent la joue sur la même page, avec la
@@ -176,6 +189,19 @@ session et le formulaire en cours. Sans cette case, chaque consigne relance un n
 
 La confirmation avant envoi est **active par défaut**. La case « ne jamais demander de
 confirmation » la coupe pour un run.
+
+**Questions express** (case cochée par défaut) : une question (« quels papiers pour vendre ma
+voiture ? », « combien coûte un passeport ? ») n'ouvre pas de navigateur. Linkup renvoie une
+réponse rédigée et sourcée depuis le web en 2 à 3 s ; elle s'affiche en grand avec
+ses sources cliquables. Une phrase qui demande une action
+(« remplis », « trouve », « déclare »…) part toujours à l'agent.
+
+**Il retient ce que tu lui dis** : quand l'agent te pose une question (donnée absente du profil),
+tu réponds à la voix ou en tapant dans la feuille de question. L'interface propose ensuite
+« Je le retiens pour la prochaine fois ? » : la réponse est ajoutée à `profile.json` sous une clé
+tirée de la question (« Quel est votre numéro de permis de conduire ? » → `numero_permis_conduire`).
+En mode conversation, l'agent relit le profil à chaque consigne : il ne la redemande plus. Dans le
+panneau profil, les données sensibles (IBAN, n° de sécu, SIRET, permis…) sont masquées.
 
 **Micro en push-to-talk** : maintiens **Espace** (ou le bouton micro) pendant que tu parles,
 relâche pour envoyer. Pas de coupure automatique au silence. L'audio part à Gladia avec le
@@ -186,7 +212,8 @@ compter environ 3 s entre le relâchement et le texte. Le temps mesuré s'affich
 Le serveur refuse toute requête POST venue d'une autre origine que `localhost:8765`, et exige du JSON.
 
 Endpoints : `GET /state`, `GET /live.png`, `GET /profile`, `GET /slides`, `POST /transcribe`,
-`POST /start`, `POST /instruct`, `POST /stop`, `POST /confirm`, `POST /answer`.
+`POST /start`, `POST /instruct`, `POST /stop`, `POST /confirm`, `POST /answer`, `POST /ask`
+(question express), `POST /profile/remember` (ajout au profil).
 Le log brut de chaque run est écrit dans `runs/agent.log` et `runs/state.json`.
 
 ## Modèles Holo (nov. 2026)
@@ -210,7 +237,7 @@ planner.py          HoloPlanner (function calling) + MockPlanner (hors-ligne)
 holo_client.py      client Models API : throttle free tier, retries
 controller.py       tools exposés au modèle + exécution Playwright + garde-fou d'envoi
 voice.py            Gladia : audio → texte
-search.py           Linkup : recherche de la démarche sur les sites officiels
+search.py           Linkup : recherche web (option sites officiels uniquement)
 demo_server.py      serveur de démo (stdlib) + API
 start_demo.bat      ouvre la démo : serveur + navigateur (Windows)
 stop_demo.bat       ferme la démo : serveur, agent, Chromium (Windows)

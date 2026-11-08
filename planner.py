@@ -17,7 +17,10 @@ from typing import Any
 
 from controller import TOOL_SPECS
 
-SYSTEM_PROMPT = """You are Cerfa, an autonomous web agent that fills French administrative forms for a user.
+SYSTEM_PROMPT = """You are Cerfa, an autonomous web agent that uses a real browser on behalf of a user.
+You can do anything a person does on the web: find information and answer questions, research and
+compare (prices, products, opening hours, reviews...), read and summarise pages, navigate any site,
+and fill in forms (administrative procedures, sign-ups, bookings...). Answer in French.
 
 # TASK
 {task}
@@ -33,28 +36,30 @@ Decide the next step and call the tools.
 
 # HARD RULES
 1. Never invent personal data. If a required field has no value in USER DATA, call ask_user.
-2. Never click an irreversible control (Envoyer, Valider, Soumettre, Payer, Signer) before calling
-   request_confirmation. The harness blocks such clicks.
+2. Never click an irreversible control (Envoyer, Valider, Soumettre, Payer, Acheter, Commander, Réserver,
+   Signer, Publier, Supprimer) before calling request_confirmation. The harness blocks such clicks.
+   Never buy, pay, book or publish anything the user did not explicitly ask for.
 3. A click on a form field must be immediately followed by a `type` call carrying the value, IN THE SAME
    RESPONSE: return both tool calls together (click then type). When several empty fields are visible on
    the screenshot, fill them all in one response (click, type, click, type...). Each round trip costs
    seconds: batch every action whose target you can already see.
-4. Dismiss cookie banners or popups before touching the form.
-5. Verify what you typed by reading the <page> block, then fill the next empty field.
+4. Dismiss cookie banners or popups before doing anything else on a page (refuse optional cookies).
+5. When filling a form, verify what you typed by reading the <page> block, then fill the next empty field.
 6. If a page looks blank, if a click changes nothing, or if you took the wrong path: never repeat the
-   same action. Use `wait` (2-3 s), then `go_back`, or `navigate` straight to the exact URL of the
-   procedure. The <page> block always carries `visible_text`: read it before deciding the page is empty.
-7. If the current page is blank (about:blank) or unrelated to the TASK and you do not know the exact URL
-   of the procedure, call `web_search` first (it only searches official sites), then `navigate` straight
-   to the best result. Never explore menus blindly when one search can give you the page. If the user
-   named a website, go there. If `web_search` fails, navigate to the official site yourself
-   (service-public.gouv.fr, ants.gouv.fr, impots.gouv.fr, caf.fr, ameli.fr...).
+   same action. Use `wait` (2-3 s), then `go_back`, or `navigate` straight to a better URL.
+   The <page> block always carries `visible_text`: read it before deciding the page is empty.
+7. If the current page is blank (about:blank) or unrelated to the TASK: if the user named a website, go
+   there; if you know the exact URL, `navigate` to it; otherwise call `web_search` first, then `navigate`
+   straight to the best result. Never explore menus blindly when one search can give you the page.
+   For a French administrative procedure, set `official_only` to true so you land on a real
+   government site (service-public.gouv.fr, ants.gouv.fr, impots.gouv.fr, caf.fr, ameli.fr...).
    Each new instruction may target another site.
-   When the TASK is only a question (e.g. which documents to provide), the snippets of `web_search`
-   may already be enough: open the best page to confirm, then `answer` with the source URL.
-8. When the form is filled and the submission is confirmed, call `answer`. `answer` is the only way
-   to stop: never stop without it.
-9. The user may give a follow-up instruction inside <new_instruction> tags. It replaces the TASK above,
+8. When the TASK is a question or a research request, gather the facts on the pages themselves (the
+   search snippets alone are not enough), compare several sources when it matters, then call `answer`
+   with a short, concrete reply and the source URLs. Do not fill forms or log in unless asked.
+9. When the TASK is done (question answered, page found, form filled and submission confirmed), call
+   `answer`. `answer` is the only way to stop: never stop without it.
+10. The user may give a follow-up instruction inside <new_instruction> tags. It replaces the TASK above,
    but everything you already did and saw stays valid context (same browser, same page, same session).
 """
 
@@ -114,18 +119,27 @@ class HoloPlanner:
     def __init__(self, client, task: str, profile: dict[str, Any], max_images: int = 3, auto_confirm: bool = False):
         self.client = client
         self.max_images = max_images
+        self._first_task = task
+        self._auto_confirm = auto_confirm
+        self.messages: list[dict[str, Any]] = [{"role": "system", "content": self._system(profile)}]
+        self.last_reasoning: str | None = None
+        self._pending: list[str] = []  # tool calls émis mais pas encore soldés par `record`
+
+    def _system(self, profile: dict[str, Any]) -> str:
         system = SYSTEM_PROMPT.format(
-            task=task,
+            task=self._first_task,
             profile=json.dumps(profile, ensure_ascii=False, indent=2),
         )
-        if auto_confirm:
+        if self._auto_confirm:
             system += (
                 "\n# CONFIRMATION DISABLED\nThe user has turned confirmation off. Do NOT call request_confirmation. "
                 "When the form is correctly filled, click the submit control directly and then call answer.\n"
             )
-        self.messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
-        self.last_reasoning: str | None = None
-        self._pending: list[str] = []  # tool calls émis mais pas encore soldés par `record`
+        return system
+
+    def update_profile(self, profile: dict[str, Any]) -> None:
+        """Le profil a gagné une donnée (réponse mémorisée) : le modèle la voit dès la consigne suivante."""
+        self.messages[0] = {"role": "system", "content": self._system(profile)}
 
     def new_task(self, task: str) -> None:
         """Mode conversation : enchaîne une consigne sans effacer l'historique.
@@ -225,6 +239,11 @@ def match_value(field: dict[str, Any], profile: dict[str, Any]) -> str | None:
         for cand in candidates:
             if re.search(rf"(?<![a-z0-9]){re.escape(cand)}(?![a-z0-9])", haystack):
                 return value
+        # Clés apprises depuis une question (« numero_permis_conduire ») : tous les mots
+        # significatifs présents dans le libellé, même séparés par « de ».
+        words = [w for w in strip_accents(key).lower().split("_") if len(w) >= 3]
+        if len(words) >= 2 and all(re.search(rf"(?<![a-z0-9]){re.escape(w)}", haystack) for w in words):
+            return value
     return None
 
 
@@ -239,6 +258,9 @@ class MockPlanner:
 
     def record(self, results: list[tuple[dict[str, Any], str]]) -> None:
         return None
+
+    def update_profile(self, profile: dict[str, Any]) -> None:
+        self.profile = profile
 
     def new_task(self, task: str) -> None:
         # Nouvelle consigne : on rejoue le scénario sur la page courante.

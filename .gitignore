@@ -1,6 +1,9 @@
 # secrets
 .env
 
+# notes perso (pitch oral)
+PITCH.md
+
 # python
 __pycache__/
 *.pyc
@@ -27,3 +30,6 @@ video/frames/
 video/final_check/
 video/preview/
 video/video_silent.mp4
+
+# presentation animee (perso)
+presentation/

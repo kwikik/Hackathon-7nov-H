@@ -1,11 +1,12 @@
-"""Linkup : trouver la bonne page d'une démarche AVANT de naviguer.
+"""Linkup : trouver la bonne page AVANT de naviguer.
 
 Sans recherche, l'agent explore les menus d'un site à l'aveugle (9 pas mesurés sur
 ANTS pour trouver « Vendre ou donner votre véhicule »). Avec Linkup, un appel
 d'environ 1 s donne l'URL exacte, et l'agent y va directement.
 
-La recherche est restreinte aux sites officiels (`includeDomains`) : l'agent ne
-peut pas atterrir sur un site qui imite l'administration.
+Par défaut la recherche couvre tout le web. Pour une démarche administrative,
+`official_only=True` la restreint aux sites officiels (`includeDomains`) : l'agent
+ne peut pas atterrir sur un site qui imite l'administration.
 
 Doc : https://docs.linkup.so — POST /v1/search
 
@@ -52,23 +53,27 @@ class SearchError(RuntimeError):
     pass
 
 
-def search(query: str, max_results: int = 5, depth: str = "fast") -> list[dict[str, str]]:
-    """Renvoie [{title, url, snippet}] depuis les sites officiels uniquement."""
+def search(
+    query: str, max_results: int = 5, depth: str = "fast", official_only: bool = False
+) -> list[dict[str, str]]:
+    """Renvoie [{title, url, snippet}]. `official_only` : sites officiels uniquement."""
     load_dotenv(Path(__file__).with_name(".env"))
     key = os.environ.get("LINKUP_API_KEY", "").strip()
     if not key:
         raise SearchError("LINKUP_API_KEY manquante dans .env (app.linkup.so)")
 
+    body: dict[str, Any] = {
+        "q": query,
+        "depth": depth,
+        "outputType": "searchResults",
+        "maxResults": max_results,
+    }
+    if official_only:
+        body["includeDomains"] = OFFICIAL_DOMAINS
     response = requests.post(
         API,
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json={
-            "q": query,
-            "depth": depth,
-            "outputType": "searchResults",
-            "includeDomains": OFFICIAL_DOMAINS,
-            "maxResults": max_results,
-        },
+        json=body,
         timeout=20,
     )
     if response.status_code >= 300:
@@ -85,6 +90,50 @@ def search(query: str, max_results: int = 5, depth: str = "fast") -> list[dict[s
             "snippet": snippet[:SNIPPET_CHARS],
         })
     return results[:max_results]
+
+
+def answer(question: str, depth: str = "fast", official_only: bool = False) -> dict[str, Any]:
+    """Question express : une réponse rédigée et sourcée, sans ouvrir de navigateur.
+
+    Ex. « quels papiers pour vendre ma voiture ? » -> {answer, sources[{title, url, snippet}]}.
+    Tout le web par défaut ; `official_only` : sites officiels uniquement.
+    """
+    load_dotenv(Path(__file__).with_name(".env"))
+    key = os.environ.get("LINKUP_API_KEY", "").strip()
+    if not key:
+        raise SearchError("LINKUP_API_KEY manquante dans .env (app.linkup.so)")
+
+    body: dict[str, Any] = {
+        "q": question + " Réponds en français, en 3 phrases maximum, simplement.",
+        "depth": depth,
+        "outputType": "sourcedAnswer",
+    }
+    if official_only:
+        body["includeDomains"] = OFFICIAL_DOMAINS
+    response = requests.post(
+        API,
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+        json=body,
+        timeout=30,
+    )
+    if response.status_code >= 300:
+        raise SearchError(f"linkup {response.status_code}: {response.text[:200]}")
+    data = response.json()
+    sources = []
+    seen = set()
+    for src in data.get("sources", []):
+        url = src.get("url")
+        page = (url or "").split("?")[0].split("#")[0]  # « F1707 » et « F1707?lang=en » : même page
+        if not url or page in seen:
+            continue
+        seen.add(page)
+        url = page if "lang=" in url else url
+        sources.append({
+            "title": str(src.get("name", ""))[:120],
+            "url": url,
+            "snippet": " ".join(str(src.get("snippet", "")).split())[:SNIPPET_CHARS],
+        })
+    return {"answer": str(data.get("answer", "")).strip(), "sources": sources[:4]}
 
 
 if __name__ == "__main__":
