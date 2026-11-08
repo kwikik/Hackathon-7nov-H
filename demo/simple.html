@@ -2,223 +2,258 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cerfa — votre assistant pour Internet</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>cerfa — votre assistant pour Internet</title>
+<meta name="theme-color" content="#07080b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M12 6h28l12 12v28a6 6 0 0 1-6 6H24l-12 10V12a6 6 0 0 1 6-6z' fill='%237c5cff'/%3E%3Cpath d='M40 6v12h12z' fill='%2335e0c4'/%3E%3Cpath d='M21 31l7 7 14-15' fill='none' stroke='%23ffffff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<!-- Atkinson Hyperlegible : police dessinée par le Braille Institute pour les personnes malvoyantes -->
-<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<!-- Lexend : conçue pour réduire la fatigue de lecture, ronde et moderne -->
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
+  /* Thème nuit : fond très sombre, halos violet et bleu-vert, accent violet.
+     Contrastes vérifiés (WCAG AA) : texte 15.8:1, secondaire 8.3:1, blanc sur violet 5.4:1. */
   :root {
-    --ink: #14213d;        /* texte : 15:1 sur blanc */
-    --ink-2: #44506a;      /* texte secondaire : 8:1 sur blanc */
-    --paper: #ffffff;
-    --surface: #f3f5f9;
-    --line: #c9d1de;
-    --blue: #1f4fd8;       /* action : 6.4:1 sur blanc */
-    --blue-dark: #173ca6;
-    --green: #0b7a3e;      /* accord : 5.6:1 sur blanc */
-    --red: #b42318;        /* refus : 6.5:1 sur blanc */
-    --wait: #ffe58a;       /* fond « en attente », texte encre dessus */
-    --font: "Atkinson Hyperlegible", Verdana, "Segoe UI", sans-serif;
-    --radius: 14px;
+    --bg: #07080b;
+    --panel: #0e1016;
+    --panel-2: #13161f;
+    --line: #222736;
+    --line-2: #2b3145;
+    --text: #e8eaf2;
+    --muted: #a3abc0;      /* 8.3:1 sur les panneaux */
+    --accent: #7c5cff;
+    --accent-strong: #6a4bf0;  /* fond des boutons : 5.4:1 avec du blanc */
+    --accent-2: #b9a6ff;
+    --teal: #35e0c4;
+    --link: #7fe9d6;
+    --ok: #34e2a0;
+    --warn: #ffb020;
+    --danger: #ff5470;
+    --danger-soft: #ff8aa0;
+    --font: "Lexend", "Segoe UI", Verdana, sans-serif;
+    color-scheme: dark;
   }
-  html { font-size: 125%; }                 /* 20 px de base ; A− / A+ changent cette valeur */
+  html { font-size: 125%; scroll-padding: 5rem 0 10rem; }  /* 20 px ; le focus ne se cache pas sous les barres fixes (WCAG 2.4.11) */
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font); line-height: 1.5; }
-  :focus-visible { outline: 4px solid var(--blue); outline-offset: 3px; }
-  button { font-family: inherit; font-size: 1rem; cursor: pointer; }
-  a { color: var(--blue); }
-
-  /* ---------- en-tête ---------- */
-  header { display: flex; align-items: center; gap: 1rem; padding: .8rem 1.5rem; border-bottom: 2px solid var(--line); flex-wrap: wrap; }
-  header h1 { margin: 0; font-size: 1.4rem; }
-  header h1 span { font-weight: 400; color: var(--ink-2); }
-  .spacer { flex: 1; }
-  .textsize { display: flex; gap: .4rem; align-items: center; }
-  .textsize span { color: var(--ink-2); font-size: .9rem; }
-  .small-btn { min-width: 3rem; min-height: 2.6rem; padding: .3rem .8rem; border: 2px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 10px; font-weight: 700; }
-  .small-btn:hover { border-color: var(--blue); }
-  .expert { color: var(--ink-2); font-size: .85rem; }
-
-  /* ---------- mise en page ---------- */
-  main { display: grid; grid-template-columns: minmax(22rem, 30rem) 1fr; gap: 1.5rem; padding: 1.5rem; max-width: 110rem; margin: 0 auto; }
-  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
-  .col { display: flex; flex-direction: column; gap: 1.2rem; min-width: 0; }
-  h2 { font-size: 1.15rem; margin: 0 0 .5rem; }
-
-  /* ---------- le bouton Parler : l'élément fort de la page ---------- */
-  .talk { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .6rem; padding: 1.2rem 1rem; background: var(--surface); border-radius: var(--radius); }
-  #mic { width: 9rem; height: 9rem; border-radius: 50%; border: none; background: var(--blue); color: #fff; display: grid; place-items: center; box-shadow: 0 6px 0 var(--blue-dark); transition: transform .1s, background .2s; }
-  #mic:hover { background: var(--blue-dark); }
-  #mic:active { transform: translateY(3px); box-shadow: 0 3px 0 var(--blue-dark); }
-  #mic svg { width: 3.6rem; height: 3.6rem; }
-  #mic.rec { background: var(--red); box-shadow: 0 6px 0 #7f1810, 0 0 0 .6rem rgba(180,35,24,.18); animation: pulse 1.2s infinite; }
-  @keyframes pulse { 50% { box-shadow: 0 6px 0 #7f1810, 0 0 0 1.1rem rgba(180,35,24,.08); } }
-  #mic-label { font-size: 1.25rem; font-weight: 700; }
-  #status { font-size: 1.05rem; color: var(--ink-2); min-height: 1.6em; }
-  #status.busy::before { content: ""; display: inline-block; width: .8em; height: .8em; margin-right: .5em; border: 3px solid var(--blue); border-right-color: transparent; border-radius: 50%; vertical-align: -.1em; animation: spin .9s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ---------- écrire ---------- */
-  .write label { display: block; font-weight: 700; margin-bottom: .4rem; }
-  .write .row { display: flex; gap: .6rem; }
-  #text { flex: 1; min-width: 0; font: inherit; font-size: 1.05rem; padding: .75rem .9rem; border: 2px solid var(--ink-2); border-radius: 10px; color: var(--ink); }
-  .btn { min-height: 3.2rem; padding: .6rem 1.3rem; border-radius: 12px; border: 2px solid transparent; font-weight: 700; font-size: 1.05rem; }
-  .btn.primary { background: var(--blue); color: #fff; }
-  .btn.primary:hover { background: var(--blue-dark); }
-  .btn.ok { background: var(--green); color: #fff; }
-  .btn.no { background: var(--paper); color: var(--red); border-color: var(--red); }
-  .btn.quiet { background: var(--paper); color: var(--ink); border-color: var(--line); }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .hint { margin: .8rem 0 0; color: var(--ink-2); font-size: .95rem; }
-
-  /* ---------- réponse ---------- */
-  #result { border: 3px solid var(--green); border-radius: var(--radius); padding: 1rem 1.2rem; background: #f1faf4; }
-  #result[hidden] { display: none; }
-  #result h2 { color: var(--green); }
-  #result .asked { color: var(--ink-2); margin: 0 0 .4rem; }
-  #result .answer { font-size: 1.15rem; margin: 0; white-space: pre-line; }
-  #result .sources { margin: .8rem 0 0; padding-left: 1.2rem; font-size: .95rem; }
-
-  /* ---------- ce que fait l'assistant ---------- */
-  #steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
-  #steps li { display: grid; grid-template-columns: 2rem 1fr; gap: .6rem; align-items: start; padding: .55rem .7rem; border-radius: 10px; background: var(--surface); }
-  #steps li:last-child { background: #e6edfc; }
-  #steps .ic { width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; background: var(--paper); border: 2px solid var(--line); font-weight: 700; }
-  #steps li.ko .ic { border-color: var(--red); color: var(--red); }
-  #steps li.done .ic { border-color: var(--green); color: var(--green); }
-  .empty { color: var(--ink-2); }
-  .actions { display: flex; gap: .6rem; flex-wrap: wrap; }
-
-  /* ---------- le site ---------- */
-  .site { display: flex; flex-direction: column; gap: .6rem; min-width: 0; }
-  #where { font-size: 1.05rem; margin: 0; }
-  #where b { word-break: break-all; }
-  .frame { border: 3px solid var(--ink); border-radius: var(--radius); overflow: hidden; background: var(--surface); aspect-ratio: 16 / 10; display: grid; place-items: center; }
-  .frame img { width: 100%; height: 100%; object-fit: contain; background: #fff; display: block; }
-  .frame img[hidden] { display: none; }
-  .frame .ph { padding: 2rem; text-align: center; color: var(--ink-2); max-width: 30rem; }
-  .frame .ph[hidden] { display: none; }
-  .frame .ph b { display: block; color: var(--ink); font-size: 1.3rem; margin-bottom: .4rem; }
-
-  /* ---------- fenêtre d'accord / de question ---------- */
-  #ask { position: fixed; inset: 0; background: rgba(20,33,61,.55); display: grid; place-items: center; padding: 1rem; z-index: 10; }
-  #ask[hidden] { display: none; }
-  .box { background: var(--paper); border-radius: 18px; padding: 1.6rem; width: min(46rem, 100%); max-height: 90vh; overflow: auto; border-top: 10px solid var(--wait); }
-  .box h2 { font-size: 1.5rem; }
-  .box .what { font-size: 1.2rem; margin: 0 0 1rem; }
-  .box table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; font-size: 1rem; }
-  .box td { padding: .5rem .4rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-  .box td.k { color: var(--ink-2); width: 40%; }
-  .box td.flag { width: 1%; white-space: nowrap; font-weight: 700; }
-  .box tr.warn td { background: #fff5d6; }
-  .box .actions .btn { flex: 1; min-height: 3.8rem; font-size: 1.15rem; }
-  #answer-row { display: flex; gap: .6rem; margin-bottom: 1rem; }
-  #answer-row[hidden] { display: none; }
-  #answer-text { flex: 1; font: inherit; font-size: 1.1rem; padding: .8rem; border: 2px solid var(--ink-2); border-radius: 10px; }
-
-  /* ---------- message ---------- */
-  #notice { position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); max-width: min(40rem, 92vw); background: var(--ink); color: #fff; padding: .9rem 1.2rem; border-radius: 12px; display: flex; gap: 1rem; align-items: center; z-index: 20; }
-  #notice[hidden] { display: none; }
-  #notice button { background: transparent; color: #fff; border: 2px solid #fff; border-radius: 8px; padding: .3rem .8rem; font-weight: 700; }
-
-  @media (max-width: 560px) {
-    .write .row { flex-direction: column; }
-    header { padding: .8rem 1rem; }
-    main { padding: 1rem; }
+  body {
+    margin: 0; min-height: 100dvh; color: var(--text); font-family: var(--font); line-height: 1.5; display: flex; flex-direction: column;
+    background:
+      radial-gradient(1200px 600px at 12% -10%, #241a4d 0%, transparent 55%),
+      radial-gradient(900px 500px at 100% 0%, #0f2b3d 0%, transparent 50%),
+      var(--bg);
+    background-attachment: fixed;
   }
+  :focus-visible { outline: 4px solid var(--accent-2); outline-offset: 3px; border-radius: 8px; }
+  button { font-family: inherit; font-size: 1rem; cursor: pointer; color: inherit; }
+  a { color: var(--link); font-weight: 500; }
 
+  /* ---------- barre du haut ---------- */
+  .bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: .8rem; padding: .7rem 1.2rem; background: rgba(7, 8, 11, .82); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: .6rem; }
+  .brand svg { width: 2.4rem; height: 2.4rem; flex: none; filter: drop-shadow(0 0 12px rgba(124, 92, 255, .55)); }
+  .brand b { font-size: 1.45rem; font-weight: 700; letter-spacing: -.02em; }
+  .brand small { display: block; font-size: .78rem; color: var(--muted); margin-top: -.25rem; }
+  .spacer { flex: 1; }
+  .tool { white-space: nowrap; min-width: 2.6rem; min-height: 2.6rem; padding: .25rem .7rem; border-radius: 999px; border: 2px solid var(--line-2); background: transparent; color: var(--text); font-weight: 500; }
+  .tool:hover { border-color: var(--accent-2); }
+  .tool .big { font-size: 1.15rem; }
+  #show-site { display: none; }
+  .expert { color: var(--muted); font-size: .8rem; font-weight: 400; }
+
+  /* ---------- page ---------- */
+  .app { flex: 1; display: grid; grid-template-columns: minmax(0, 46rem) minmax(0, 1fr); gap: 1.5rem; padding: 1.2rem 1.2rem 0; max-width: 112rem; width: 100%; margin: 0 auto; }
+
+  /* ---------- la conversation ---------- */
+  #thread { display: flex; flex-direction: column; gap: .9rem; padding-bottom: 10rem; }
+  .msg { max-width: 88%; padding: .8rem 1.05rem; line-height: 1.5; animation: pop .25s ease-out; }
+  @keyframes pop { from { opacity: 0; transform: translateY(6px) scale(.98); } }
+  .msg p { margin: 0; }
+  .msg p + p { margin-top: .5rem; }
+  .me { align-self: flex-end; background: var(--accent-strong); color: #fff; border-radius: 1.3rem 1.3rem .35rem 1.3rem; box-shadow: 0 8px 24px rgba(106, 75, 240, .3); }
+  .bot { align-self: flex-start; background: var(--panel); border: 1px solid var(--line); border-radius: 1.3rem 1.3rem 1.3rem .35rem; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04); }
+  .bot.answer { border: 1px solid rgba(53, 224, 196, .45); background: linear-gradient(180deg, rgba(53, 224, 196, .08), var(--panel) 60%); }
+  .bot.answer .lead { font-size: 1.1rem; }
+  .bot.problem { border-color: rgba(255, 84, 112, .55); }
+  .who { display: block; font-size: .8rem; color: var(--accent-2); margin-bottom: .25rem; letter-spacing: .02em; }
+  .sources { margin: .6rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: .3rem; font-size: .9rem; }
+
+  /* les étapes : des cases de formulaire qui se cochent une à une */
+  .checks { list-style: none; margin: .4rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .35rem; }
+  .checks li { display: grid; grid-template-columns: 1.35rem 1fr; gap: .6rem; align-items: start; }
+  .box { width: 1.35rem; height: 1.35rem; margin-top: .12rem; border: 2px solid var(--line-2); border-radius: 4px; display: grid; place-items: center; background: var(--panel-2); }
+  .box svg { width: .9rem; height: .9rem; }
+  li.done .box { background: var(--ok); border-color: var(--ok); color: var(--bg); }
+  li.now .box { border-color: var(--warn); background: rgba(255, 176, 32, .12); }
+  li.now .box::after { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: var(--warn); animation: blink 1s infinite; }
+  li.fail .box { border-color: var(--danger); color: var(--danger-soft); font-weight: 700; font-size: .8rem; }
+  @keyframes blink { 50% { opacity: .2; } }
+
+  /* ---------- l'écran du site ---------- */
+  .site { position: sticky; top: 5.2rem; align-self: start; display: flex; flex-direction: column; gap: .5rem; }
+  .site h2 { margin: 0; font-size: 1rem; font-weight: 500; color: var(--muted); }
+  .site h2 b { color: var(--text); font-weight: 700; word-break: break-all; }
+  .screen { position: relative; border-radius: 1.1rem; overflow: hidden; border: 1px solid var(--line-2); background: #05060a; aspect-ratio: 16 / 10; display: grid; place-items: center; box-shadow: 0 30px 70px rgba(0, 0, 0, .45), 0 0 0 1px rgba(124, 92, 255, .08); }
+  /* la petite souris : là où l'assistant vient de cliquer */
+  #cursor { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 2; pointer-events: none; opacity: 0; transition: left .5s cubic-bezier(.2,.8,.2,1), top .5s cubic-bezier(.2,.8,.2,1), opacity .3s; }
+  #cursor.on { opacity: 1; }
+  #cursor .ripple { position: absolute; left: -15px; top: -15px; width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--accent-2); box-shadow: 0 0 14px rgba(124, 92, 255, .8); animation: clickring 1.3s ease-out infinite; }
+  #cursor svg { position: absolute; left: -4px; top: -3px; width: 28px; height: 28px; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .7)); }
+  @keyframes clickring { from { transform: scale(.5); opacity: 1; } to { transform: scale(2.2); opacity: 0; } }
+  .screen img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .screen img[hidden], .screen .empty[hidden] { display: none; }
+  .screen .empty { text-align: center; color: var(--muted); padding: 1.5rem; max-width: 24rem; }
+  .screen .empty svg { width: 3rem; height: 3rem; margin-bottom: .4rem; color: var(--accent-2); }
+  .site .note { margin: 0; font-size: .85rem; color: var(--muted); }
+
+  /* ---------- la barre de saisie ---------- */
+  .composer { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; padding: .8rem 1.2rem calc(.8rem + env(safe-area-inset-bottom)); background: linear-gradient(to top, var(--bg) 62%, rgba(7, 8, 11, 0)); }
+  .composer-in { max-width: 46rem; display: flex; align-items: center; gap: .7rem; background: var(--panel); border: 1px solid var(--line-2); border-radius: 999px; padding: .45rem .45rem .45rem .6rem; box-shadow: 0 16px 40px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(255, 255, 255, .04); }
+  @media (min-width: 1001px) { .composer-in { margin-left: max(0px, calc((100vw - 112rem) / 2)); } }
+
+  /* l'orbe : c'est le bouton pour parler */
+  #mic { position: relative; flex: none; width: 6rem; height: 6rem; margin: -1rem 0 -1rem -.3rem;  /* débordement égal en haut et en bas : centrée sur la barre */ border-radius: 50%; border: none; padding: 0; background: transparent; color: #fff; display: grid; place-items: center; }
+  #mic .halo { position: absolute; inset: 12%; border-radius: 50%; filter: blur(18px); opacity: .7; background: radial-gradient(circle, var(--accent), transparent 70%); transition: background .5s, opacity .4s; }
+  #mic canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; }
+  #mic .fallback { position: absolute; inset: 18%; border-radius: 50%; background: radial-gradient(circle at 32% 28%, #d7ccff, var(--accent) 40%, #2a1b6b 75%); box-shadow: 0 0 40px rgba(124, 92, 255, .6); display: none; }
+  #mic.nogl .fallback { display: block; }
+  #mic .icon { position: relative; z-index: 2; width: 1.9rem; height: 1.9rem; filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .6)); }
+  #mic[data-mode="listening"] .halo { background: radial-gradient(circle, #ff6bb5, transparent 70%); opacity: .95; }
+  #mic[data-mode="working"] .halo { background: radial-gradient(circle, #5b8bff, transparent 70%); }
+  #mic[data-mode="waiting"] .halo { background: radial-gradient(circle, var(--warn), transparent 70%); opacity: .85; }
+  #mic[data-mode="error"] .halo { background: radial-gradient(circle, var(--danger), transparent 70%); }
+  #mic:focus-visible { outline-offset: -2px; border-radius: 50%; }
+
+  #text { flex: 1; min-width: 0; border: none; outline: none; font: inherit; font-size: 1.05rem; color: var(--text); background: transparent; padding: .5rem .2rem; }
+  #text::placeholder { color: #8b93a8; }   /* 6.2:1 sur le panneau */
+  #send { flex: none; min-height: 3.2rem; padding: 0 1.3rem; border-radius: 999px; border: none; background: var(--accent-strong); color: #fff; font-weight: 700; box-shadow: 0 8px 22px rgba(106, 75, 240, .35); }
+  #send:hover { background: #5b3de0; }
+  #stop { flex: none; min-height: 3.2rem; padding: 0 1rem; border-radius: 999px; border: 1px solid rgba(255, 84, 112, .45); background: rgba(255, 84, 112, .08); color: var(--danger-soft); font-weight: 500; }
+  #stop[hidden] { display: none; }
+  #live { max-width: 46rem; margin: 0 0 .45rem 7rem; font-size: .9rem; color: var(--muted); min-height: 1.4em; }
+  @media (min-width: 1001px) { #live { margin-left: max(7rem, calc((100vw - 112rem) / 2 + 7rem)); } }
+
+  /* ---------- feuille d'accord / de question ---------- */
+  #sheet { position: fixed; inset: 0; z-index: 10; background: rgba(3, 4, 8, .72); backdrop-filter: blur(4px); display: flex; align-items: flex-end; justify-content: center; padding: 1rem; }
+  #sheet[hidden] { display: none; }
+  .sheet { width: min(44rem, 100%); max-height: 88vh; overflow: auto; background: linear-gradient(180deg, #17122b, #0d0f18); border: 1px solid rgba(124, 92, 255, .45); border-radius: 1.6rem; padding: 1.5rem 1.5rem 1.2rem; box-shadow: 0 -20px 60px rgba(0, 0, 0, .6), 0 0 60px rgba(124, 92, 255, .15); animation: up .3s cubic-bezier(.2,.8,.2,1); }
+  @keyframes up { from { transform: translateY(40px); opacity: 0; } }
+  .sheet h2 { margin: 0 0 .4rem; font-size: 1.45rem; letter-spacing: -.01em; }
+  .sheet .what { margin: 0 0 1rem; font-size: 1.1rem; }
+  .sheet table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; font-size: .95rem; }
+  .sheet td { padding: .5rem .3rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .sheet td.k { color: var(--muted); width: 38%; }
+  .sheet td.f { width: 1%; white-space: nowrap; font-weight: 500; color: var(--ok); }
+  .sheet tr.warn td { background: rgba(255, 176, 32, .1); }
+  .sheet tr.warn td.f { color: var(--warn); }
+  #answer-text { width: 100%; font: inherit; font-size: 1.1rem; padding: .8rem 1rem; border: 1px solid var(--line-2); border-radius: 14px; margin-bottom: 1rem; background: #0a0c12; color: var(--text); }
+  #answer-text:focus { border-color: var(--accent-2); }
+  #answer-text[hidden] { display: none; }
+  .choices { display: flex; gap: .7rem; }
+  .choices button { flex: 1; min-height: 3.8rem; border-radius: 999px; font-weight: 700; font-size: 1.1rem; }
+  #ask-yes { border: none; background: linear-gradient(180deg, #1fbf85, #14a56f); color: #04120c; box-shadow: 0 8px 24px rgba(20, 165, 111, .3); }
+  #ask-no { border: 1px solid rgba(255, 84, 112, .55); background: transparent; color: var(--danger-soft); }
+
+  /* ---------- petit écran ---------- */
+  @media (max-width: 1000px) {
+    .app { grid-template-columns: 1fr; }
+    .site { display: none; }
+    body.with-site .site { display: flex; position: fixed; inset: 4.4rem .8rem auto; z-index: 7; background: var(--bg); padding: .8rem; border-radius: 1.2rem; border: 1px solid var(--line-2); box-shadow: 0 20px 50px rgba(0, 0, 0, .6); }
+    #show-site { display: inline-flex; align-items: center; }
+    .brand small { display: none; }
+  }
+  @media (max-width: 560px) {
+    .bar { padding: .6rem .8rem; gap: .5rem; }
+    .expert { display: none; }
+    .brand b { font-size: 1.2rem; }
+    .tool { padding: .2rem .55rem; }
+    .composer { padding-left: .6rem; padding-right: .6rem; }
+    #send { padding: 0 .8rem; font-size: .95rem; }
+    #mic { width: 4.6rem; height: 4.6rem; margin: -.45rem 0 -.45rem -.2rem; }
+    #mic .icon { width: 1.6rem; height: 1.6rem; }
+    #live { margin-left: 5rem; }
+    .msg { max-width: 94%; }
+  }
   @media (prefers-reduced-motion: reduce) {
-    *, *::before { animation: none !important; transition: none !important; }
+    *, *::before, *::after { animation: none !important; transition: none !important; }
   }
 </style>
 </head>
 <body>
-<header>
-  <h1>Cerfa <span>· votre assistant pour Internet</span></h1>
-  <div class="spacer"></div>
-  <div class="textsize" role="group" aria-label="Taille du texte">
-    <span>Taille du texte</span>
-    <button class="small-btn" id="smaller" aria-label="Texte plus petit">A−</button>
-    <button class="small-btn" id="bigger" aria-label="Texte plus grand">A+</button>
+<header class="bar">
+  <div class="brand">
+    <!-- le logo : une feuille de formulaire en forme de bulle, coin plié et coche -->
+    <svg viewBox="0 0 64 64" aria-hidden="true">
+      <path d="M12 6h28l12 12v28a6 6 0 0 1-6 6H24l-12 10V12a6 6 0 0 1 6-6z" fill="#7c5cff"/>
+      <path d="M40 6v12h12z" fill="#35e0c4"/>
+      <path d="M21 31l7 7 14-15" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div><b>cerfa</b><small>votre assistant pour Internet</small></div>
   </div>
+  <div class="spacer"></div>
+  <button class="tool" id="show-site" aria-expanded="false">Site</button>
+  <button class="tool" id="smaller" aria-label="Texte plus petit">A−</button>
+  <button class="tool" id="bigger" aria-label="Texte plus grand"><span class="big">A+</span></button>
   <a class="expert" href="/expert">Mode expert</a>
 </header>
 
-<main>
-  <div class="col">
-    <section class="talk" aria-label="Parler à l'assistant">
-      <button id="mic" aria-label="Parler">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-          <rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/>
-        </svg>
-      </button>
-      <div id="mic-label">Appuyez pour parler</div>
-      <div id="status" role="status" aria-live="polite">Dites-moi ce que vous voulez faire sur Internet.</div>
-    </section>
+<div class="app">
+  <main id="thread" aria-live="polite" aria-label="Conversation avec l'assistant"></main>
 
-    <section class="write">
-      <label for="text">Ou écrivez votre demande</label>
-      <div class="row">
-        <input id="text" type="text" autocomplete="off" placeholder="Écrivez ce que vous voulez faire">
-        <button class="btn primary" id="send">Envoyer</button>
+  <aside class="site" aria-label="Le site ouvert par l'assistant">
+    <h2 id="where">Aucun site ouvert</h2>
+    <div class="screen">
+      <div id="cursor" aria-hidden="true">
+        <span class="ripple"></span>
+        <svg viewBox="0 0 24 24"><path d="M4 2.5l15.5 7.4-6.8 2-3.1 7z" fill="#ffffff" stroke="#07080b" stroke-width="1.6" stroke-linejoin="round"/></svg>
       </div>
-      <p class="hint">Vous pouvez demander une information, trouver une démarche, ouvrir un site,
-        comparer des prix ou remplir un formulaire. Je vous demande toujours votre accord avant d'envoyer,
-        de payer ou de commander quoi que ce soit.</p>
-    </section>
-
-    <section id="result" hidden aria-live="polite">
-      <h2>Voici la réponse</h2>
-      <p class="asked"></p>
-      <p class="answer"></p>
-      <ul class="sources"></ul>
-    </section>
-
-    <section>
-      <h2>Ce que fait l'assistant</h2>
-      <ol id="steps" aria-live="polite"><li class="empty" style="display:block;background:none;padding:0">Rien pour l'instant. Les étapes s'afficheront ici, une par une.</li></ol>
-    </section>
-
-    <div class="actions">
-      <button class="btn quiet" id="stop">Arrêter l'assistant</button>
-    </div>
-  </div>
-
-  <section class="site" aria-label="Le site ouvert par l'assistant">
-    <p id="where">Aucun site ouvert pour l'instant.</p>
-    <div class="frame">
       <img id="shot" alt="Ce que l'assistant voit à l'écran" hidden>
-      <div class="ph" id="ph"><b>Le site s'affichera ici</b>Quand l'assistant ouvre une page, vous la voyez ici en même temps que lui.</div>
+      <div class="empty" id="empty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 8h18M8 21h8"/></svg>
+        <div>Le site s'affichera ici, en même temps que l'assistant le voit.</div>
+      </div>
     </div>
-  </section>
-</main>
+    <p class="note">Vous pouvez aussi cliquer vous-même dans la fenêtre du navigateur : cet écran suit.</p>
+  </aside>
+</div>
 
-<!-- accord avant une action irréversible, ou question de l'assistant -->
-<div id="ask" hidden role="dialog" aria-modal="true" aria-labelledby="ask-title">
-  <div class="box">
-    <h2 id="ask-title">Avant de continuer, j'ai besoin de votre accord</h2>
-    <p class="what" id="ask-what"></p>
-    <div id="ask-recap"></div>
-    <div id="answer-row" hidden>
-      <input id="answer-text" type="text" autocomplete="off" aria-label="Votre réponse">
-    </div>
-    <div class="actions">
-      <button class="btn no" id="ask-no">Non, annuler</button>
-      <button class="btn ok" id="ask-yes">Oui, continuer</button>
-    </div>
+<div class="composer">
+  <div id="live" role="status" aria-live="polite"></div>
+  <div class="composer-in">
+    <button id="mic" aria-label="Parler" data-mode="idle">
+      <span class="halo" aria-hidden="true"></span>
+      <span class="fallback" aria-hidden="true"></span>
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+    </button>
+    <label for="text" style="position:absolute;left:-9999px">Votre demande</label>
+    <input id="text" type="text" autocomplete="off" placeholder="Écrivez ici">
+    <button id="stop" hidden>Arrêter</button>
+    <button id="send">Envoyer</button>
   </div>
 </div>
 
-<div id="notice" hidden role="alert"><span id="notice-text"></span><button id="notice-close">Fermer</button></div>
+<div id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="ask-title">
+  <div class="sheet">
+    <h2 id="ask-title">J'ai besoin de votre accord</h2>
+    <p class="what" id="ask-what"></p>
+    <div id="ask-recap"></div>
+    <input id="answer-text" type="text" autocomplete="off" aria-label="Votre réponse" hidden>
+    <div class="choices">
+      <button id="ask-no">Non, annuler</button>
+      <button id="ask-yes">Oui, continuer</button>
+    </div>
+  </div>
+</div>
 
 <script>
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const host = (u) => { try { return new URL(u).host.replace(/^www\./, ""); } catch (_) { return ""; } };
+const TICK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3.2 3L13 4.5"/></svg>';
+
 let state = { status: "idle", steps: [] };
-let lastStatus = "idle", lastShotKey = "", lastAnswer = "", busyLocal = false, askKind = null;
+let lastStatus = null, lastShotKey = "", askKind = null;
+let work = null;            // la bulle « je m'en occupe » de la demande en cours
+let answerAtSend = null;    // réponse affichée avant la demande : on n'attend que la suivante
 
 // ---------- taille du texte (mémorisée) ----------
 const SIZES = [100, 112.5, 125, 140, 160];
@@ -231,22 +266,42 @@ function applySize() {
 $("#smaller").onclick = () => { sizeIdx = Math.max(0, sizeIdx - 1); applySize(); };
 $("#bigger").onclick = () => { sizeIdx = Math.min(SIZES.length - 1, sizeIdx + 1); applySize(); };
 applySize();
+$("#show-site").onclick = () => {
+  const on = document.body.classList.toggle("with-site");
+  $("#show-site").textContent = on ? "Fermer" : "Site";
+  $("#show-site").setAttribute("aria-expanded", on);
+};
 
-// ---------- messages (restent affichés jusqu'à ce qu'on les ferme) ----------
-function notice(text) { $("#notice-text").textContent = text; $("#notice").hidden = false; }
-$("#notice-close").onclick = () => { $("#notice").hidden = true; };
+// ---------- la conversation ----------
+function bubble(kind, html, extra = "") {
+  const el = document.createElement("div");
+  el.className = `msg ${kind} ${extra}`.trim();
+  el.innerHTML = (kind === "bot" ? '<span class="who">cerfa</span>' : "") + html;
+  $("#thread").appendChild(el);
+  el.scrollIntoView({ behavior: "smooth", block: "end" });
+  return el;
+}
+const say = (text, extra) => bubble("bot", `<p>${esc(text)}</p>`, extra);
+function live(text) { $("#live").textContent = text || ""; }
+
+function answerBubble(text, sources) {
+  const clean = String(text).replace(/\*\*/g, "");
+  const list = (sources || []).slice(0, 3).map((s) =>
+    `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || host(s.url))}</a></li>`).join("");
+  bubble("bot", `<p class="lead">${esc(clean)}</p>${list ? `<ul class="sources">${list}</ul>` : ""}`, "answer");
+}
 
 // ---------- ce que fait l'assistant, en français courant ----------
 function sentence(s) {
   const a = s.args || {};
-  if (!s.ok && s.tool === "click") return "Je voulais cliquer sur un bouton d'envoi : j'attends d'abord votre accord.";
+  if (!s.ok && s.tool === "click") return "Je voulais valider : j'attends d'abord votre accord.";
   if (!s.ok) return "Ça n'a pas marché, j'essaie autrement.";
   switch (s.tool) {
-    case "navigate": return "J'ouvre le site " + (host(a.url) || a.url || "") + ".";
-    case "web_search": return "Je cherche « " + (a.query || "") + " » sur Internet.";
+    case "navigate": return "J'ouvre " + (host(a.url) || "le site") + ".";
+    case "web_search": return "Je cherche « " + (a.query || "") + " ».";
     case "click": return "Je clique sur la page.";
     case "type": return "J'écris « " + (a.text || "") + " ».";
-    case "press_key": return a.key === "Enter" ? "J'appuie sur la touche Entrée." : "J'appuie sur une touche du clavier.";
+    case "press_key": return a.key === "Enter" ? "Je valide avec la touche Entrée." : "J'appuie sur une touche.";
     case "scroll": return a.direction === "up" ? "Je remonte dans la page." : "Je descends dans la page.";
     case "wait": return "J'attends que la page se charge.";
     case "go_back": return "Je reviens à la page précédente.";
@@ -256,64 +311,79 @@ function sentence(s) {
     default: return "Je continue.";
   }
 }
-let lastStepsLen = -1;
-function renderSteps() {
+function renderWork() {
+  if (!work) return;
   const steps = state.steps || [];
-  if (steps.length === lastStepsLen) return;
-  lastStepsLen = steps.length;
-  if (!steps.length) return;
-  // Clic puis saisie : une seule ligne « J'écris … » suffit, le clic n'apporte rien à l'utilisateur.
+  // Un clic suivi d'une saisie : seule la saisie parle à l'utilisateur.
   const shown = steps.filter((s, i) => !(s.tool === "click" && s.ok && steps[i + 1] && steps[i + 1].tool === "type"));
-  $("#steps").innerHTML = shown.slice(-8).map((s) => {
-    const cls = !s.ok ? "ko" : s.tool === "answer" ? "done" : "";
-    const icon = !s.ok ? "!" : s.tool === "answer" ? "✓" : "•";
-    return `<li class="${cls}"><span class="ic" aria-hidden="true">${icon}</span><span>${esc(sentence(s))}</span></li>`;
-  }).join("");
+  const running = state.status === "running";
+  const items = shown.slice(-7).map((s) => {
+    const cls = !s.ok ? "fail" : "done";
+    return `<li class="${cls}"><span class="box" aria-hidden="true">${s.ok ? TICK : "!"}</span><span>${esc(sentence(s))}</span></li>`;
+  });
+  if (running) items.push(`<li class="now"><span class="box" aria-hidden="true"></span><span>Je regarde la page…</span></li>`);
+  work.querySelector(".checks").innerHTML = items.join("");
 }
 
 // ---------- état de l'assistant ----------
-const STATUS = {
-  idle: "Dites-moi ce que vous voulez faire sur Internet.",
-  running: "Je m'en occupe…",
-  listening: "C'est fait. Vous pouvez me demander autre chose.",
-  done: "C'est fait. Vous pouvez me demander autre chose.",
-  awaiting_confirmation: "J'attends votre accord.",
-  awaiting_input: "J'ai besoin d'une information.",
-  aborted: "D'accord, je n'ai rien envoyé.",
-  error: "Je n'ai pas réussi. Essayez de reformuler votre demande.",
-  interrupted: "Dites-moi ce que vous voulez faire sur Internet.",  // ancien run arrêté : on repart à zéro
-};
-function setStatus(text, busy) { $("#status").textContent = text; $("#status").classList.toggle("busy", !!busy); }
-
 function render() {
   const s = state.status;
-  if (!recording && !transcribing && !busyLocal) setStatus(STATUS[s] || STATUS.idle, s === "running");
-  renderSteps();
+  renderWork();
   renderSite();
+  placeCursor();  // nouveau run, nouvelle étape : la souris suit (ou disparaît)
+  $("#stop").hidden = !(state.running && s !== "listening");
 
   if (s !== lastStatus) {
-    if (s === "awaiting_confirmation") openAsk("confirm");
-    else if (s === "awaiting_input") openAsk("input");
-    else closeAsk();
+    if (s === "awaiting_confirmation") openSheet("confirm");
+    else if (s === "awaiting_input") openSheet("input");
+    else closeSheet();
+    if (s === "running") live("Je m'en occupe…");
+    else if (s === "awaiting_confirmation") live("J'attends votre accord.");
+    else if (s === "awaiting_input") live("J'attends votre réponse.");
+    else if (!recording && !transcribing) live("");
     lastStatus = s;
   }
-  if (["done", "listening", "aborted"].includes(s) && state.answer && state.answer !== lastAnswer) {
-    lastAnswer = state.answer;
-    showResult(state.task, state.answer, []);
+  // La demande en cours est terminée : on fige les étapes et on donne la réponse.
+  if (work && ["done", "listening", "aborted", "error"].includes(s) && state.answer !== answerAtSend) {
+    renderWork();
+    if (s === "error") say("Je n'ai pas réussi cette fois. Essayez de reformuler votre demande.", "problem");
+    else if (state.answer) answerBubble(state.answer);
+    work = null;
   }
 }
 
+// Holo vise en coordonnées [0, 1000] sur sa capture. On replace ce point sur l'image
+// affichée (object-fit: contain : des bandes vides possibles autour).
+function placeCursor() {
+  const steps = state.steps || [];
+  let click = null;
+  for (let i = steps.length - 1; i >= Math.max(0, steps.length - 3); i--) {
+    const s = steps[i];
+    if (s.tool === "click" && s.args && s.args.x != null) { click = s; break; }
+  }
+  const cur = $("#cursor"), img = $("#shot");
+  if (!click || img.hidden) { cur.classList.remove("on"); return; }
+  const box = $(".screen");
+  const w = box.clientWidth, h = box.clientHeight;
+  const nw = img.naturalWidth || 1280, nh = img.naturalHeight || 800;
+  const k = Math.min(w / nw, h / nh);
+  const ox = (w - nw * k) / 2, oy = (h - nh * k) / 2;
+  cur.style.left = (ox + (click.args.x / 1000) * nw * k) + "px";
+  cur.style.top = (oy + (click.args.y / 1000) * nh * k) + "px";
+  cur.classList.add("on");
+}
+addEventListener("resize", placeCursor);
+
 function renderSite() {
   const url = state.url && state.url !== "about:blank" ? state.url : "";
-  const label = state.running ? "Site ouvert" : "Dernière page vue";
-  $("#where").innerHTML = url ? `${label} : <b>${esc(host(url) || url)}</b>` : "Aucun site ouvert pour l'instant.";
+  $("#where").innerHTML = url ? `${state.running ? "Site ouvert" : "Dernière page vue"} : <b>${esc(host(url) || url)}</b>` : "Aucun site ouvert";
   if (!state.screenshot) return;
   const key = (state.steps || []).length + ":" + (state.shot_at || "");
   if (key === lastShotKey) return;
   lastShotKey = key;
   const img = $("#shot");
-  img.onload = () => { img.hidden = false; $("#ph").hidden = true; };
-  img.onerror = () => { img.hidden = true; $("#ph").hidden = false; };
+  img.onload = () => { img.hidden = false; $("#empty").hidden = true; placeCursor(); };
+  img.onerror = () => { img.hidden = true; $("#empty").hidden = false; };
   img.src = "/live.png?t=" + Date.now();
 }
 
@@ -321,20 +391,10 @@ async function poll() {
   try {
     const r = await fetch("/state", { cache: "no-store" });
     state = await r.json();
+    if (lastStatus === null) { lastStatus = state.status; answerAtSend = state.answer; }  // pas de rejeu au chargement
     render();
   } catch (_) { /* serveur pas encore prêt */ }
   setTimeout(poll, 600);
-}
-
-// ---------- réponse ----------
-function showResult(question, answer, sources) {
-  const box = $("#result");
-  box.querySelector(".asked").textContent = question ? "Votre demande : « " + question + " »" : "";
-  box.querySelector(".answer").textContent = String(answer).replace(/\*\*/g, "");
-  box.querySelector(".sources").innerHTML = (sources || []).slice(0, 3).map((s) =>
-    `<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title || host(s.url))}</a> (${esc(host(s.url))})</li>`).join("");
-  box.hidden = false;
-  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 // ---------- envoyer une demande ----------
@@ -351,48 +411,88 @@ async function post(path, body) {
 
 async function handleText(text) {
   text = (text || "").trim();
-  if (!text) return;
+  if (!text) { $("#text").focus(); return; }
   $("#text").value = "";
-  $("#result").hidden = true;
+  bubble("me", `<p>${esc(text)}</p>`);
 
   // Une question simple : réponse rapide, sans ouvrir de site.
   if (isQuestion(text)) {
-    busyLocal = true;
-    setStatus("Je cherche la réponse…", true);
+    live("Je cherche la réponse…");
     try {
       const d = await post("/ask", { question: text });
-      showResult(text, d.answer, d.sources);
-      setStatus("Voici ce que j'ai trouvé. Vous pouvez me demander autre chose.");
+      answerBubble(d.answer, d.sources);
+      live("");
       return;
-    } catch (_) {
-      /* pas de recherche rapide disponible : l'assistant ouvre le navigateur */
-    } finally { busyLocal = false; }
+    } catch (_) { /* pas de réponse rapide : l'assistant ouvre le navigateur */ }
   }
 
-  setStatus("Je m'en occupe…", true);
+  answerAtSend = state.answer;
+  work = bubble("bot", '<p>Je m\'en occupe :</p><ul class="checks"></ul>');
+  renderWork();
+  live("Je m'en occupe…");
   try {
     if (state.running && state.status === "listening") await post("/instruct", { task: text });
-    else await post("/start", { task: text, url: "about:blank", interactive: true });
+    else await post("/start", { task: text, interactive: true });
   } catch (e) {
-    notice("Je n'ai pas pu lancer l'assistant : " + e.message);
+    work = null;
+    say("Je n'ai pas pu démarrer : " + e.message + ".", "problem");
+    live("");
   }
 }
 $("#send").onclick = () => handleText($("#text").value);
 $("#text").addEventListener("keydown", (e) => { if (e.key === "Enter") handleText($("#text").value); });
 $("#stop").onclick = async () => {
-  try { const d = await post("/stop"); setStatus(d.stopped ? "L'assistant est arrêté." : "L'assistant était déjà arrêté."); }
-  catch (e) { notice("Impossible d'arrêter : " + e.message); }
+  try { await post("/stop"); work = null; say("D'accord, je me suis arrêté."); live(""); }
+  catch (e) { say("Je n'ai pas pu m'arrêter : " + e.message + ".", "problem"); }
 };
+
+// ---------- l'orbe : son état suit celui de l'assistant ----------
+// Lu par l'orbe 3D à chaque image : mode (idle, listening, working, waiting, error) + niveau du micro.
+window.cerfaUI = { mode: "idle", level: 0 };
+setInterval(() => {
+  const s = state.status;
+  let mode = "idle";
+  if (recording) mode = "listening";
+  else if (s === "awaiting_confirmation" || s === "awaiting_input") mode = "waiting";
+  else if (transcribing || s === "running" || work) mode = "working";
+  else if (s === "error") mode = "error";
+  window.cerfaUI.mode = mode;
+  $("#mic").dataset.mode = mode;
+}, 120);
 
 // ---------- micro : un appui pour parler, un appui pour envoyer ----------
 let recorder = null, chunks = [], recording = false, transcribing = false, startedAt = 0;
+let meterCtx = null, meterRaf = 0;
+// Le niveau sonore fait vibrer l'orbe pendant qu'on parle.
+function startMeter(stream) {
+  try {
+    meterCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const an = meterCtx.createAnalyser();
+    an.fftSize = 1024;
+    meterCtx.createMediaStreamSource(stream).connect(an);
+    const buf = new Uint8Array(an.fftSize);
+    const loop = () => {
+      an.getByteTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; sum += v * v; }
+      window.cerfaUI.level = Math.sqrt(sum / buf.length);
+      meterRaf = requestAnimationFrame(loop);
+    };
+    loop();
+  } catch (_) { /* pas de niveau : l'orbe écoute quand même */ }
+}
+function stopMeter() {
+  cancelAnimationFrame(meterRaf);
+  window.cerfaUI.level = 0;
+  if (meterCtx) { meterCtx.close().catch(() => {}); meterCtx = null; }
+}
 async function toggleMic() {
   if (recording) { recorder.stop(); return; }
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, autoGainControl: true, channelCount: 1 } });
-  } catch (e) {
-    notice("Le micro n'est pas autorisé. Cliquez sur le cadenas à gauche de l'adresse du site, puis autorisez le micro.");
+  } catch (_) {
+    say("Le micro n'est pas autorisé. Cliquez sur le cadenas à gauche de l'adresse du site, puis autorisez le micro. Vous pouvez aussi écrire votre demande.", "problem");
     return;
   }
   const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
@@ -400,74 +500,202 @@ async function toggleMic() {
   chunks = [];
   recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
   recorder.onstop = async () => {
+    stopMeter();
     stream.getTracks().forEach((t) => t.stop());
     recording = false;
     $("#mic").classList.remove("rec");
     $("#mic").setAttribute("aria-label", "Parler");
-    $("#mic-label").textContent = "Appuyez pour parler";
     const blob = new Blob(chunks, { type: mime || "audio/webm" });
-    if (performance.now() - startedAt < 700 || blob.size < 2000) { setStatus("Je n'ai rien entendu. Appuyez, parlez, puis appuyez à nouveau."); return; }
+    if (performance.now() - startedAt < 700 || blob.size < 2000) { live("Je n'ai rien entendu. Appuyez sur le micro, parlez, puis appuyez de nouveau."); return; }
     transcribing = true;
-    setStatus("J'écoute ce que vous avez dit…", true);
+    live("Je transcris ce que vous avez dit…");
     try {
       const r = await fetch("/transcribe", { method: "POST", body: blob });
       const d = await r.json();
-      if (!d.text) { setStatus("Je n'ai pas compris. Pouvez-vous répéter ?"); return; }
-      transcribing = false;
+      if (!d.text) { live("Je n'ai pas compris. Pouvez-vous répéter ?"); return; }
+      live("");
       if (askKind === "input") { $("#answer-text").value = d.text; return; }
       if (askKind === "confirm") { reply(/\b(oui|ouais|ok|d'accord|vas[- ]y|envoie|valide)\b/i.test(d.text) && !/\b(non|pas|annule|stop)\b/i.test(d.text)); return; }
-      $("#text").value = d.text;
       handleText(d.text);
-    } catch (e) {
-      notice("La reconnaissance de la voix ne répond pas. Vous pouvez écrire votre demande.");
+    } catch (_) {
+      live("La reconnaissance de la voix ne répond pas. Écrivez votre demande.");
     } finally { transcribing = false; }
   };
   recorder.start(100);
+  startMeter(stream);
   recording = true;
   startedAt = performance.now();
   $("#mic").classList.add("rec");
   $("#mic").setAttribute("aria-label", "Arrêter et envoyer");
-  $("#mic-label").textContent = "Je vous écoute… appuyez quand vous avez fini";
-  setStatus("Parlez maintenant.");
+  live("Je vous écoute… appuyez de nouveau sur le micro quand vous avez fini.");
 }
 $("#mic").onclick = toggleMic;
 addEventListener("keydown", (e) => {
-  if (e.code === "Space" && !["INPUT", "TEXTAREA", "BUTTON"].includes(document.activeElement.tagName)) { e.preventDefault(); toggleMic(); }
+  if (e.code === "Space" && !["INPUT", "TEXTAREA", "BUTTON", "A"].includes(document.activeElement.tagName)) { e.preventDefault(); toggleMic(); }
 });
 
 // ---------- accord / question ----------
 const FLAG = { ok: "✓ conforme", diff: "⚠ à vérifier", missing: "⚠ vide", other: "" };
-function openAsk(kind) {
+let returnFocus = null;
+function openSheet(kind) {
   askKind = kind;
+  returnFocus = document.activeElement;
   const confirm = kind === "confirm";
-  $("#ask-title").textContent = confirm ? "Avant de continuer, j'ai besoin de votre accord" : "J'ai besoin d'une information";
+  $("#ask-title").textContent = confirm ? "J'ai besoin de votre accord" : "J'ai une question";
   $("#ask-what").textContent = state.awaiting || "";
   const rows = confirm ? (state.recap || []) : [];
   $("#ask-recap").innerHTML = rows.length ? "<table>" + rows.map((r) =>
-    `<tr class="${r.status === "diff" || r.status === "missing" ? "warn" : ""}"><td class="k">${esc(r.label)}</td><td>${esc(r.value || "(vide)")}</td><td class="flag">${FLAG[r.status] || ""}</td></tr>`).join("") + "</table>" : "";
-  $("#answer-row").hidden = confirm;
+    `<tr class="${r.status === "diff" || r.status === "missing" ? "warn" : ""}"><td class="k">${esc(r.label)}</td><td>${esc(r.value || "(vide)")}</td><td class="f">${FLAG[r.status] || ""}</td></tr>`).join("") + "</table>" : "";
+  $("#answer-text").hidden = confirm;
   $("#ask-yes").textContent = confirm ? "Oui, continuer" : "Répondre";
   $("#ask-no").textContent = confirm ? "Non, annuler" : "Je ne sais pas";
-  $("#ask").hidden = false;
-  setTimeout(() => (confirm ? $("#ask-yes") : $("#answer-text")).focus(), 50);
+  $("#sheet").hidden = false;
+  setTimeout(() => (confirm ? $("#ask-yes") : $("#answer-text")).focus(), 60);
 }
-function closeAsk() { $("#ask").hidden = true; askKind = null; $("#answer-text").value = ""; }
+function closeSheet() {
+  const wasOpen = !$("#sheet").hidden;
+  $("#sheet").hidden = true; askKind = null; $("#answer-text").value = "";
+  if (wasOpen) (returnFocus && document.contains(returnFocus) ? returnFocus : $("#text")).focus();
+}
+// Fenêtre ouverte : Tab reste dedans, Échap vaut « Non » (le choix sans risque).
+$("#sheet").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { e.preventDefault(); reply(false); return; }
+  if (e.key !== "Tab") return;
+  const items = [...$("#sheet").querySelectorAll("button, input:not([hidden]), a[href]")].filter((el) => el.offsetParent);
+  const first = items[0], last = items[items.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
 async function reply(yes) {
-  const kind = askKind;
-  closeAsk();
+  const kind = askKind, text = $("#answer-text").value.trim();
+  if (kind === "input" && yes && !text) { $("#answer-text").focus(); return; }
+  closeSheet();
   try {
-    if (kind === "confirm") await post("/confirm", { approved: !!yes });
-    else await post("/answer", { text: yes ? $("#answer-text").value || "" : "" });
-  } catch (e) { notice("Votre réponse n'est pas partie : " + e.message); }
+    if (kind === "confirm") {
+      await post("/confirm", { approved: !!yes });
+      if (!yes) say("D'accord, je n'envoie rien.");
+    } else {
+      await post("/answer", { text: yes ? text : "" });
+      if (yes) bubble("me", `<p>${esc(text)}</p>`);
+    }
+  } catch (e) { say("Votre réponse n'est pas partie : " + e.message + ".", "problem"); }
 }
-$("#ask-yes").onclick = () => {
-  if (askKind === "input") { const v = $("#answer-text").value.trim(); if (!v) { $("#answer-text").focus(); return; } post("/answer", { text: v }).catch((e) => notice(e.message)); closeAsk(); return; }
-  reply(true);
-};
+$("#ask-yes").onclick = () => reply(true);
 $("#ask-no").onclick = () => reply(false);
-$("#answer-text").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#ask-yes").click(); });
+$("#answer-text").addEventListener("keydown", (e) => { if (e.key === "Enter") reply(true); });
 
+// ---------- accueil ----------
+bubble("bot", `<p>Bonjour ! Dites-moi ce que vous voulez faire sur Internet : chercher une information, trouver une démarche, ouvrir un site, comparer des prix ou remplir un formulaire.</p>
+  <p>Appuyez sur la boule lumineuse en bas pour parler (ou la touche Espace), ou écrivez à côté. Je vous demande toujours votre accord avant d'envoyer, de payer ou de commander quoi que ce soit.</p>`);
 poll();
+</script>
+<!-- L'orbe 3D : Three.js chargé en module depuis un CDN. Sans WebGL ou sans réseau,
+     une sphère en CSS prend le relais et le bouton reste utilisable. -->
+<script type="module">
+  const host = document.getElementById("mic");
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  try {
+    const THREE = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js");
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+    renderer.setSize(host.clientWidth, host.clientHeight);
+    renderer.domElement.setAttribute("aria-hidden", "true");
+    host.insertBefore(renderer.domElement, host.querySelector(".icon"));
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
+    camera.position.z = 4.4;
+
+    // Bruit de Perlin 3D (Ashima / Stefan Gustavson) : déforme la sphère.
+    const NOISE = `
+      vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
+      vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
+      vec4 permute(vec4 x){return mod289(((x*34.0)+1.0)*x);}
+      vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+      float snoise(vec3 v){
+        const vec2 C=vec2(1.0/6.0,1.0/3.0); const vec4 D=vec4(0.0,0.5,1.0,2.0);
+        vec3 i=floor(v+dot(v,C.yyy)); vec3 x0=v-i+dot(i,C.xxx);
+        vec3 g=step(x0.yzx,x0.xyz); vec3 l=1.0-g; vec3 i1=min(g.xyz,l.zxy); vec3 i2=max(g.xyz,l.zxy);
+        vec3 x1=x0-i1+C.xxx; vec3 x2=x0-i2+C.yyy; vec3 x3=x0-D.yyy;
+        i=mod289(i);
+        vec4 p=permute(permute(permute(i.z+vec4(0.0,i1.z,i2.z,1.0))+i.y+vec4(0.0,i1.y,i2.y,1.0))+i.x+vec4(0.0,i1.x,i2.x,1.0));
+        float n_=0.142857142857; vec3 ns=n_*D.wyz-D.xzx;
+        vec4 j=p-49.0*floor(p*ns.z*ns.z); vec4 x_=floor(j*ns.z); vec4 y_=floor(j-7.0*x_);
+        vec4 x=x_*ns.x+ns.yyyy; vec4 y=y_*ns.x+ns.yyyy; vec4 h=1.0-abs(x)-abs(y);
+        vec4 b0=vec4(x.xy,y.xy); vec4 b1=vec4(x.zw,y.zw);
+        vec4 s0=floor(b0)*2.0+1.0; vec4 s1=floor(b1)*2.0+1.0; vec4 sh=-step(h,vec4(0.0));
+        vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy; vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+        vec3 p0=vec3(a0.xy,h.x); vec3 p1=vec3(a0.zw,h.y); vec3 p2=vec3(a1.xy,h.z); vec3 p3=vec3(a1.zw,h.w);
+        vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+        p0*=norm.x; p1*=norm.y; p2*=norm.z; p3*=norm.w;
+        vec4 m=max(0.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.0); m=m*m;
+        return 42.0*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+      }`;
+
+    const uniforms = {
+      uTime: { value: 0 }, uAmp: { value: 0.1 }, uFreq: { value: 1.3 },
+      uColA: { value: new THREE.Color("#7c5cff") }, uColB: { value: new THREE.Color("#35e0c4") },
+    };
+    const material = new THREE.ShaderMaterial({
+      uniforms,
+      vertexShader: NOISE + `
+        uniform float uTime; uniform float uAmp; uniform float uFreq;
+        varying float vN; varying vec3 vNormal; varying vec3 vView;
+        void main(){
+          float n = snoise(normal * uFreq + vec3(uTime * 0.6, uTime * 0.4, uTime * 0.5));
+          float n2 = snoise(normal * uFreq * 2.3 - vec3(uTime * 0.9));
+          vN = n;
+          vec3 p = position + normal * (n * uAmp + n2 * uAmp * 0.35);
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          vNormal = normalize(normalMatrix * normal);
+          vView = normalize(-mv.xyz);
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: `
+        uniform vec3 uColA; uniform vec3 uColB;
+        varying float vN; varying vec3 vNormal; varying vec3 vView;
+        void main(){
+          float fres = pow(1.0 - max(dot(vNormal, vView), 0.0), 2.2);
+          vec3 base = mix(uColA, uColB, smoothstep(-0.6, 0.8, vN));
+          vec3 col = base * (0.35 + 0.75 * (0.5 + 0.5 * vN)) + fres * mix(uColB, vec3(1.0), 0.35) * 1.25;
+          gl_FragColor = vec4(col, 0.94);
+        }`,
+      transparent: true,
+    });
+    const sphere = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 48), material);
+    scene.add(sphere);
+
+    const MODES = {
+      idle:      { amp: 0.10, freq: 1.3, speed: 0.35, a: "#7c5cff", b: "#35e0c4" },
+      listening: { amp: 0.16, freq: 1.8, speed: 0.9,  a: "#ff6bb5", b: "#7c5cff" },
+      working:   { amp: 0.22, freq: 2.2, speed: 1.4,  a: "#5b8bff", b: "#7c5cff" },
+      waiting:   { amp: 0.16, freq: 1.5, speed: 0.6,  a: "#ffb020", b: "#ff6bb5" },
+      error:     { amp: 0.08, freq: 1.2, speed: 0.3,  a: "#ff5470", b: "#5a1a2a" },
+    };
+    const colA = new THREE.Color(), colB = new THREE.Color();
+    let t = 0, last = performance.now(), amp = 0.1, freq = 1.3, speed = 0.35;
+    function frame(now) {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const ui = window.cerfaUI || { mode: "idle", level: 0 };
+      const m = MODES[ui.mode] || MODES.idle;
+      let targetAmp = m.amp;
+      if (ui.mode === "listening") targetAmp += Math.min(0.5, ui.level * 4.5);
+      const k = 1 - Math.pow(0.002, dt);  // lissage indépendant du nombre d'images/s
+      amp += (targetAmp - amp) * k; freq += (m.freq - freq) * k; speed += ((still ? 0 : m.speed) - speed) * k;
+      colA.set(m.a); colB.set(m.b);
+      uniforms.uColA.value.lerp(colA, k); uniforms.uColB.value.lerp(colB, k);
+      t += dt * speed;
+      uniforms.uTime.value = t; uniforms.uAmp.value = amp; uniforms.uFreq.value = freq;
+      if (!still) { sphere.rotation.y += dt * (0.15 + speed * 0.25); sphere.rotation.x = Math.sin(t * 0.3) * 0.2; }
+      renderer.render(scene, camera);
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+    // Le bouton suit la taille du texte (A− / A+) : l'orbe aussi.
+    new ResizeObserver(() => renderer.setSize(host.clientWidth, host.clientHeight)).observe(host);
+  } catch (e) {
+    console.warn("orbe 3D indisponible, repli CSS :", e);
+    host.classList.add("nogl");
+  }
 </script>
 </body>
 </html>
